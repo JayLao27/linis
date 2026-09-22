@@ -1,0 +1,89 @@
+rules_version = '2';
+
+// Linis Firestore rules.
+//
+// Money and rating fields are written by the client inside transactions
+// (see lib/data/repositories). These rules limit WHO can touch WHICH fields.
+// For production, move confirmCompletion / settle / review averaging into
+// Cloud Functions so clients can't write those numbers at all.
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function uid() { return request.auth.uid; }
+    function me() { return get(/databases/$(database)/documents/users/$(uid())).data; }
+    function isAdmin() { return signedIn() && me().role == 'admin'; }
+    function isProvider() { return signedIn() && me().role == 'provider'; }
+    function changed() { return request.resource.data.diff(resource.data).affectedKeys(); }
+    function onlyChanges(keys) { return changed().hasOnly(keys); }
+
+    match /users/{userId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && userId == uid()
+        && request.resource.data.role in ['customer', 'provider']
+        && request.resource.data.ratingCount == 0;
+      allow update: if isAdmin()
+        || (userId == uid() && onlyChanges(['fullName', 'phone', 'photoUrl']))
+        // A provider rating a customer after a job.
+        || (isProvider() && onlyChanges(['ratingAvg', 'ratingCount']));
+    }
+
+    match /providers/{providerId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && providerId == uid()
+        && request.resource.data.verificationStatus == 'incomplete'
+        && request.resource.data.unsettledCommission == 0;
+      allow update: if isAdmin()
+        // Onboarding edits and submitting for review.
+        || (providerId == uid()
+            && !changed().hasAny(['ratingAvg', 'ratingCount', 'completedJobs',
+                                  'unsettledCommission', 'totalEarnings'])
+            && (!changed().hasAny(['verificationStatus'])
+                || request.resource.data.verificationStatus == 'pending'))
+        // Settling commission (clears the balance only).
+        || (providerId == uid() && onlyChanges(['unsettledCommission'])
+            && request.resource.data.unsettledCommission == 0)
+        // A customer rating the provider or confirming a completed job.
+        || (signedIn() && onlyChanges(['ratingAvg', 'ratingCount',
+            'completedJobs', 'totalEarnings', 'unsettledCommission']));
+    }
+
+    match /bookings/{bookingId} {
+      function isCustomer() { return resource.data.customerId == uid(); }
+      function isAssigned() { return resource.data.providerId == uid(); }
+
+      allow read: if isAdmin()
+        || (signedIn() && (isCustomer() || isAssigned()))
+        || (isProvider() && resource.data.status == 'pending');
+      allow create: if signedIn()
+        && request.resource.data.customerId == uid()
+        && request.resource.data.status == 'pending'
+        && request.resource.data.providerId == null
+        && request.resource.data.paymentStatus == 'unpaid';
+      allow update: if isAdmin()
+        || (signedIn() && (isCustomer() || isAssigned()))
+        // Accepting or declining an open request.
+        || (isProvider() && resource.data.status == 'pending'
+            && (request.resource.data.providerId == uid()
+                || onlyChanges(['declinedBy', 'requestedProviderId'])));
+    }
+
+    match /reviews/{reviewId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.fromUid == uid()
+        && request.resource.data.rating >= 1 && request.resource.data.rating <= 5;
+    }
+
+    match /notifications/{id} {
+      allow read: if signedIn() && resource.data.userId == uid();
+      allow create: if signedIn();
+      allow update: if signedIn() && resource.data.userId == uid()
+        && onlyChanges(['read']);
+    }
+
+    match /ledger/{id} {
+      allow read: if isAdmin() || (signedIn() && resource.data.providerId == uid());
+      allow create: if signedIn();
+    }
+  }
+}
