@@ -54,8 +54,17 @@ class Backend {
   late final ReviewRepository reviews;
   late final LedgerRepository ledger;
 
-  static Future<Backend> create() =>
-      AppConfig.useFirebase ? firebase() : demo();
+  static Future<Backend> create() {
+    if (AppConfig.useFirebase) return firebase();
+    // fake_cloud_firestore refuses to run without assertions (release builds).
+    var assertionsOn = false;
+    assert(assertionsOn = true);
+    if (!assertionsOn) {
+      throw StateError('The demo backend only runs in debug builds. '
+          'Build with --dart-define=LINIS_BACKEND=firebase for release.');
+    }
+    return demo();
+  }
 
   static Future<Backend> firebase() async {
     await Firebase.initializeApp(

@@ -29,8 +29,9 @@ ThemeData buildTheme(Brightness brightness) {
       backgroundColor: Colors.transparent,
       surfaceTintColor: Colors.transparent,
       centerTitle: false,
-      titleTextStyle: base.textTheme.titleLarge
-          ?.copyWith(fontWeight: FontWeight.w700, color: scheme.onSurface),
+      // base.textTheme has no sizes yet (they're merged in by Theme.of).
+      titleTextStyle: TextStyle(
+          fontSize: 22, fontWeight: FontWeight.w700, color: scheme.onSurface),
     ),
     cardTheme: CardThemeData(
       elevation: 0,

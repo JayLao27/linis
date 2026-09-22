@@ -76,9 +76,12 @@ class TierBadge extends StatelessWidget {
           Icon(isCompany ? Icons.business_rounded : Icons.person_rounded,
               size: 13, color: color),
           const SizedBox(width: 4),
-          Text(tier.label,
-              style: TextStyle(
-                  color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          Flexible(
+            child: Text(tier.label,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+          ),
         ],
       ),
     );
@@ -199,12 +202,18 @@ class ProviderCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 4),
-                    Row(children: [
-                      TierBadge(p.tier),
-                      const SizedBox(width: 8),
-                      RatingBadge(
-                          avg: p.ratingAvg, count: p.ratingCount, compact: true),
-                    ]),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      children: [
+                        TierBadge(p.tier),
+                        RatingBadge(
+                            avg: p.ratingAvg,
+                            count: p.ratingCount,
+                            compact: true),
+                      ],
+                    ),
                     const SizedBox(height: 4),
                     Text(detail,
                         style: TextStyle(
@@ -244,12 +253,17 @@ class BookingCard extends StatelessWidget {
     this.forProvider = false,
     this.onTap,
     this.footer,
+    this.priceOverride,
   });
 
   final Booking booking;
   final bool forProvider;
   final VoidCallback? onTap;
   final Widget? footer;
+
+  /// Shown instead of the booking's price, e.g. a provider's own quote on an
+  /// open request.
+  final double? priceOverride;
 
   @override
   Widget build(BuildContext context) {
@@ -259,9 +273,11 @@ class BookingCard extends StatelessWidget {
         ? b.customerName
         : (b.providerName ??
             (b.isDirect ? 'Waiting for your chosen cleaner' : 'Finding a cleaner…'));
-    final price = b.price != null
-        ? peso(b.price!)
-        : pesoRange(b.estimateMin, b.estimateMax);
+    final price = priceOverride != null
+        ? peso(priceOverride!)
+        : b.price != null
+            ? peso(b.price!)
+            : pesoRange(b.estimateMin, b.estimateMax);
 
     return Card(
       clipBehavior: Clip.antiAlias,
@@ -299,7 +315,17 @@ class BookingCard extends StatelessWidget {
                       ],
                     ),
                   ),
-                  StatusChip(b.status, forProvider: forProvider),
+                  const SizedBox(width: 8),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      StatusChip(b.status, forProvider: forProvider),
+                      const SizedBox(height: 6),
+                      Text(price,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w800, fontSize: 14)),
+                    ],
+                  ),
                 ],
               ),
               const Divider(height: 22),
@@ -318,9 +344,6 @@ class BookingCard extends StatelessWidget {
                         overflow: TextOverflow.ellipsis,
                         style: const TextStyle(fontSize: 13)),
                   ),
-                  Text(price,
-                      style: const TextStyle(
-                          fontWeight: FontWeight.w800, fontSize: 14)),
                 ],
               ),
               if (footer != null) ...[const SizedBox(height: 12), footer!],

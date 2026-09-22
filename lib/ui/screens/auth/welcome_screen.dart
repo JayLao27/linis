@@ -27,7 +27,7 @@ class WelcomeScreen extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 8),
                     Row(
                       children: [
                         Container(
@@ -46,7 +46,7 @@ class WelcomeScreen extends StatelessWidget {
                                 fontWeight: FontWeight.w800)),
                       ],
                     ),
-                    const SizedBox(height: 48),
+                    const SizedBox(height: 32),
                     Text('Trusted home cleaners in Davao City',
                         style: text.displaySmall?.copyWith(
                             color: Colors.white,
@@ -60,7 +60,7 @@ class WelcomeScreen extends StatelessWidget {
                           color: Colors.white.withValues(alpha: 0.85),
                           height: 1.4),
                     ),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 24),
                     ..._points.map((p) => Padding(
                           padding: const EdgeInsets.only(bottom: 12),
                           child: Row(
@@ -75,7 +75,7 @@ class WelcomeScreen extends StatelessWidget {
                             ],
                           ),
                         )),
-                    const SizedBox(height: 32),
+                    const SizedBox(height: 20),
                     FilledButton(
                       style: FilledButton.styleFrom(
                         backgroundColor: Colors.white,
