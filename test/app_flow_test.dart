@@ -94,6 +94,33 @@ void main() {
     expect(find.text('End plan'), findsOneWidget);
   });
 
+  testWidgets('cleaner reads an unread message and replies', (tester) async {
+    final backend = await _pumpApp(tester);
+    await _login(tester, DemoSeed.individualEmail);
+    await tester.tap(find.text('My jobs'));
+    await tester.pumpAndSettle();
+
+    // Unread preview on the card.
+    expect(find.textContaining('keep the screen door closed'), findsOneWidget);
+
+    await tester.tap(find.text('Ben Tan'));
+    await tester.pumpAndSettle();
+    expect(find.text('New message'), findsOneWidget);
+
+    await tester.tap(find.text('New message'));
+    await tester.pumpAndSettle();
+    expect(find.textContaining('mention Blk 3 Lot 12'), findsOneWidget);
+
+    await tester.tap(find.text("I'm on my way"));
+    await tester.pumpAndSettle();
+    expect(find.text("I'm on my way"), findsNWidgets(2)); // chip + bubble
+
+    final b = await tester.runAsync(() => backend.bookings.watch('seed-b3').first);
+    expect(b!.lastMessageText, "I'm on my way");
+    expect(b.hasUnreadFor('prov-maria'), isFalse);
+    expect(b.hasUnreadFor('cust-ben'), isTrue);
+  });
+
   testWidgets('admin approves a pending cleaner', (tester) async {
     final backend = await _pumpApp(tester);
     await _login(tester, DemoSeed.adminEmail);

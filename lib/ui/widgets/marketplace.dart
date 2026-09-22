@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 
 import '../../core/format.dart';
 import '../../data/models/booking.dart';
 import '../../data/models/enums.dart';
 import '../../data/models/provider_profile.dart';
+import '../../state/session_controller.dart';
 import '../theme.dart';
 import 'common.dart';
 
@@ -374,6 +376,25 @@ class BookingCard extends StatelessWidget {
                   ),
                 ],
               ),
+              if (b.hasUnreadFor(context.read<SessionController>().uid)) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    Icon(Icons.mark_chat_unread_rounded,
+                        size: 16, color: scheme.primary),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: Text('"${b.lastMessageText ?? ''}"',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                              color: scheme.primary,
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
+                    ),
+                  ],
+                ),
+              ],
               if (footer != null) ...[const SizedBox(height: 12), footer!],
             ],
           ),

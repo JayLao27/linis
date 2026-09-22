@@ -9,6 +9,7 @@ import 'demo_seed.dart';
 import 'models/enums.dart';
 import 'repositories/auth_repository.dart';
 import 'repositories/booking_repository.dart';
+import 'repositories/chat_repository.dart';
 import 'repositories/ledger_repository.dart';
 import 'repositories/notification_repository.dart';
 import 'repositories/provider_repository.dart';
@@ -37,6 +38,7 @@ class Backend {
     bookings = BookingRepository(db, providers, notifications, pricing: pricing);
     reviews = ReviewRepository(db, notifications);
     ledger = LedgerRepository(db, notifications);
+    chat = ChatRepository(db, notifications);
   }
 
   final FirebaseFirestore db;
@@ -53,6 +55,7 @@ class Backend {
   late final BookingRepository bookings;
   late final ReviewRepository reviews;
   late final LedgerRepository ledger;
+  late final ChatRepository chat;
 
   static Future<Backend> create() {
     if (AppConfig.useFirebase) return firebase();

@@ -14,6 +14,7 @@ import '../../widgets/booking_actions.dart';
 import '../../widgets/common.dart';
 import '../../widgets/marketplace.dart';
 import '../../widgets/sheets.dart';
+import 'chat_screen.dart';
 import 'provider_profile_screen.dart';
 
 /// One booking, from the customer's or the provider's side. The action bar at
@@ -66,7 +67,21 @@ class _BookingDetailView extends StatelessWidget {
         : null;
 
     return Scaffold(
-      appBar: AppBar(title: Text(b.serviceType.label)),
+      appBar: AppBar(
+        title: Text(b.serviceType.label),
+        actions: [
+          if (b.hasChat && b.isParticipant(session.uid))
+            IconButton(
+              tooltip: 'Messages',
+              icon: Badge(
+                isLabelVisible: b.hasUnreadFor(session.uid),
+                smallSize: 9,
+                child: const Icon(Icons.chat_bubble_outline_rounded),
+              ),
+              onPressed: () => _openChat(context, b.id),
+            ),
+        ],
+      ),
       body: ListView(
         padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
         children: [
@@ -111,6 +126,10 @@ class _BookingDetailView extends StatelessWidget {
           ],
           const SizedBox(height: 12),
           if (isCustomer) _ProviderSection(booking: b) else _CustomerSection(booking: b),
+          if (b.hasChat && b.isParticipant(session.uid)) ...[
+            const SizedBox(height: 12),
+            _ChatCard(booking: b),
+          ],
           const SizedBox(height: 12),
           Card(
             child: Padding(
@@ -818,6 +837,57 @@ class _PlanSection extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+void _openChat(BuildContext context, String bookingId) =>
+    Navigator.of(context).push(MaterialPageRoute(
+        builder: (_) => ChatScreen(bookingId: bookingId)));
+
+/// Last message preview with an unread marker; opens the chat.
+class _ChatCard extends StatelessWidget {
+  const _ChatCard({required this.booking});
+  final Booking booking;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final uid = context.read<SessionController>().uid;
+    final unread = b.hasUnreadFor(uid);
+    final scheme = Theme.of(context).colorScheme;
+    final other = uid == b.customerId
+        ? (b.providerName ?? 'your cleaner')
+        : b.customerName;
+    final preview = b.lastMessageText == null
+        ? (b.canChat
+            ? 'Send a message to $other'
+            : 'No messages were sent.')
+        : '${b.lastMessageBy == uid ? 'You: ' : ''}${b.lastMessageText}';
+
+    return Card(
+      color: unread ? scheme.primaryContainer.withValues(alpha: 0.35) : null,
+      clipBehavior: Clip.antiAlias,
+      child: ListTile(
+        contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        leading: CircleAvatar(
+          backgroundColor: scheme.primaryContainer,
+          child: Icon(
+              unread
+                  ? Icons.mark_chat_unread_rounded
+                  : Icons.chat_bubble_outline_rounded,
+              color: scheme.primary),
+        ),
+        title: Text(unread ? 'New message' : 'Messages',
+            style: TextStyle(
+                fontWeight: unread ? FontWeight.w800 : FontWeight.w700)),
+        subtitle: Text(preview, maxLines: 2, overflow: TextOverflow.ellipsis),
+        trailing: b.lastMessageAt == null
+            ? const Icon(Icons.chevron_right_rounded)
+            : Text(timeAgo(b.lastMessageAt!),
+                style: TextStyle(fontSize: 12, color: scheme.onSurfaceVariant)),
+        onTap: () => _openChat(context, b.id),
       ),
     );
   }

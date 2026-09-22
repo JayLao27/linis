@@ -53,6 +53,11 @@ class Booking {
     this.recurrence = Recurrence.none,
     this.visitNumber = 1,
     this.totalVisits = 1,
+    this.lastMessageText,
+    this.lastMessageBy,
+    this.lastMessageAt,
+    this.customerReadAt,
+    this.providerReadAt,
   });
 
   final String id;
@@ -105,6 +110,28 @@ class Booking {
   final int totalVisits;
 
   bool get isRecurring => planId != null;
+
+  /// Chat summary, so lists can show unread markers without reading messages.
+  final String? lastMessageText;
+  final String? lastMessageBy;
+  final DateTime? lastMessageAt;
+  final DateTime? customerReadAt;
+  final DateTime? providerReadAt;
+
+  /// Chat opens once a provider is assigned and stays open until the job
+  /// ends; afterwards the history is read-only.
+  bool get hasChat => providerId != null;
+  bool get canChat => hasChat && status.isActive;
+
+  bool isParticipant(String uid) => uid == customerId || uid == providerId;
+
+  bool hasUnreadFor(String uid) {
+    if (lastMessageAt == null || lastMessageBy == uid || !isParticipant(uid)) {
+      return false;
+    }
+    final readAt = uid == customerId ? customerReadAt : providerReadAt;
+    return readAt == null || readAt.isBefore(lastMessageAt!);
+  }
 
   String get barangayCode => address.barangay.code;
   bool get isDirect => requestedProviderId != null;
@@ -170,6 +197,11 @@ class Booking {
             Recurrence.values, map['recurrence'], Recurrence.none),
         visitNumber: readInt(map['visitNumber'], 1),
         totalVisits: readInt(map['totalVisits'], 1),
+        lastMessageText: map['lastMessageText'] as String?,
+        lastMessageBy: map['lastMessageBy'] as String?,
+        lastMessageAt: readDate(map['lastMessageAt']),
+        customerReadAt: readDate(map['customerReadAt']),
+        providerReadAt: readDate(map['providerReadAt']),
       );
 
   /// The document written when a customer submits a request.

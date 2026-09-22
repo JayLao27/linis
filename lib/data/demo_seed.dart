@@ -383,6 +383,38 @@ class DemoSeed {
       'createdAt': Timestamp.fromDate(_daysAgo(1)),
       'acceptedAt': Timestamp.fromDate(_daysAgo(1)),
     });
+    // Ben and Maria have been messaging; Ben's last message is unread.
+    final chat = bookings.doc('seed-b3').collection('messages');
+    final msgs = [
+      ('prov-maria', 'Maria Santos',
+          'Hi Sir Ben! Maria here, confirming tomorrow at 1 PM.', 20),
+      ('cust-ben', 'Ben Tan',
+          'Hi Maria! Yes please. The guard will let you in, just mention Blk 3 Lot 12.',
+          18),
+      ('cust-ben', 'Ben Tan',
+          'Also, we have a cat. She is friendly but please keep the screen door closed.',
+          17),
+    ];
+    for (final (from, name, text, hoursAgo) in msgs) {
+      await chat.add({
+        'senderId': from,
+        'senderName': name,
+        'text': text,
+        'createdAt':
+            Timestamp.fromDate(_now.subtract(Duration(hours: hoursAgo))),
+      });
+    }
+    await bookings.doc('seed-b3').update({
+      'lastMessageText': msgs.last.$3,
+      'lastMessageBy': 'cust-ben',
+      'lastMessageAt':
+          Timestamp.fromDate(_now.subtract(const Duration(hours: 17))),
+      'customerReadAt':
+          Timestamp.fromDate(_now.subtract(const Duration(hours: 17))),
+      'providerReadAt':
+          Timestamp.fromDate(_now.subtract(const Duration(hours: 20))),
+    });
+
     await _db.collection('plans').doc('seed-plan1').set({
       'customerId': 'cust-ben',
       'customerName': 'Ben Tan',

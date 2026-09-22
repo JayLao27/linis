@@ -287,6 +287,96 @@ void main() {
       expect(b.paymentStatus, PaymentStatus.refunded);
     });
 
+    group('chat', () {
+      Future<String> acceptedJob() async {
+        final id = await be.bookings.create(draft(method: PaymentMethod.cash));
+        await be.bookings.accept(id, providerId);
+        return id;
+      }
+
+      Future<Booking> booking(String id) async =>
+          (await be.bookings.watch(id).first)!;
+
+      test('is closed until a cleaner accepts', () async {
+        final id = await be.bookings.create(draft());
+        expect(
+            () => be.chat.send(
+                bookingId: id,
+                senderId: customerId,
+                senderName: 'C',
+                text: 'Hello?'),
+            throwsA(isA<BookingException>()));
+      });
+
+      test('messages flow both ways and track unread per side', () async {
+        final id = await acceptedJob();
+        await be.chat.send(
+            bookingId: id,
+            senderId: customerId,
+            senderName: 'Test Customer',
+            text: 'Gate code is 1234');
+        var b = await booking(id);
+        expect(b.hasUnreadFor(providerId), isTrue);
+        expect(b.hasUnreadFor(customerId), isFalse);
+
+        await be.chat.markRead(b, providerId);
+        b = await booking(id);
+        expect(b.hasUnreadFor(providerId), isFalse);
+
+        await be.chat.send(
+            bookingId: id,
+            senderId: providerId,
+            senderName: 'Test Cleaner',
+            text: 'Got it, on my way');
+        b = await booking(id);
+        expect(b.hasUnreadFor(customerId), isTrue);
+        expect(b.lastMessageText, 'Got it, on my way');
+
+        final msgs = await be.chat.watch(id).first;
+        expect(msgs.map((m) => m.text), ['Gate code is 1234', 'Got it, on my way']);
+      });
+
+      test('a burst of messages sends one notification', () async {
+        final id = await acceptedJob();
+        for (final t in ['Hi', 'Are you coming?', 'Hello?']) {
+          await be.chat.send(
+              bookingId: id,
+              senderId: customerId,
+              senderName: 'Test Customer',
+              text: t);
+        }
+        final notes = await be.notifications.watch(providerId).first;
+        expect(notes.where((n) => n.title.startsWith('Message from')).length, 1);
+      });
+
+      test('outsiders and closed bookings cannot send', () async {
+        final id = await acceptedJob();
+        expect(
+            () => be.chat.send(
+                bookingId: id,
+                senderId: 'someone-else',
+                senderName: 'X',
+                text: 'hi'),
+            throwsA(isA<BookingException>()));
+        expect(
+            () => be.chat.send(
+                bookingId: id,
+                senderId: customerId,
+                senderName: 'C',
+                text: '   '),
+            throwsA(isA<BookingException>()));
+
+        await be.bookings.cancel(id, customerId);
+        expect(
+            () => be.chat.send(
+                bookingId: id,
+                senderId: customerId,
+                senderName: 'C',
+                text: 'still there?'),
+            throwsA(isA<BookingException>()));
+      });
+    });
+
     group('recurring plans', () {
       Future<void> runVisit(String id, {bool accept = false}) async {
         if (accept) await be.bookings.accept(id, providerId);

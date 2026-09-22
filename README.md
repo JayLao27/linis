@@ -108,6 +108,15 @@ separately. Either side can skip a single visit or end the plan. Ending a plan
 cancels the open visit and refunds it if it was paid by GCash. In the demo,
 Ben's job with Maria is visit 1 of a weekly plan.
 
+**Chat:** once a cleaner accepts, the customer and cleaner can message each
+other on the booking (`bookings/{id}/messages`). Quick replies cover common
+messages like "I'm on my way" and "The gate is open". The booking document keeps
+the last message and each side's read time, so booking cards show unread
+previews without loading the conversation. A burst of messages sends one
+notification until the recipient reads them. Chat becomes read-only when the
+booking is completed or cancelled. In the demo, Maria has an unread message
+from Ben.
+
 ## Known limitations
 
 - **GCash is simulated** (`SimulatedGCashGateway`). A real integration needs a

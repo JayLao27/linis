@@ -79,6 +79,24 @@ service cloud.firestore {
         || (isProvider() && resource.data.status == 'pending'
             && (request.resource.data.providerId == uid()
                 || onlyChanges(['declinedBy', 'requestedProviderId'])));
+
+      // Chat between the customer and the assigned provider.
+      match /messages/{messageId} {
+        function booking() {
+          return get(/databases/$(database)/documents/bookings/$(bookingId)).data;
+        }
+        function participant() {
+          return signedIn() && booking().providerId != null
+            && uid() in [booking().customerId, booking().providerId];
+        }
+        allow read: if isAdmin() || participant();
+        allow create: if participant()
+          && booking().status in ['accepted', 'inProgress', 'awaitingConfirmation']
+          && request.resource.data.senderId == uid()
+          && request.resource.data.text is string
+          && request.resource.data.text.size() > 0
+          && request.resource.data.text.size() <= 1000;
+      }
     }
 
     match /plans/{planId} {
