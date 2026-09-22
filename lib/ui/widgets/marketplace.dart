@@ -31,8 +31,13 @@ class RatingBadge extends StatelessWidget {
         const SizedBox(width: 2),
         Text(avg.toStringAsFixed(1),
             style: const TextStyle(fontWeight: FontWeight.w700)),
-        Text(compact ? ' ($count)' : ' · $count review${count == 1 ? '' : 's'}',
-            style: TextStyle(color: muted, fontSize: 13)),
+        Flexible(
+          child: Text(
+              compact ? ' ($count)' : ' · $count review${count == 1 ? '' : 's'}',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(color: muted, fontSize: 13)),
+        ),
       ],
     );
   }
@@ -312,6 +317,29 @@ class BookingCard extends StatelessWidget {
                             overflow: TextOverflow.ellipsis,
                             style: TextStyle(
                                 color: scheme.onSurfaceVariant, fontSize: 13)),
+                        if (b.isRecurring)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              children: [
+                                Icon(Icons.repeat_rounded,
+                                    size: 14, color: scheme.primary),
+                                const SizedBox(width: 4),
+                                Flexible(
+                                  child: Text(
+                                    '${b.recurrence.label} · visit '
+                                    '${b.visitNumber} of ${b.totalVisits}',
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: TextStyle(
+                                        color: scheme.primary,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
                       ],
                     ),
                   ),

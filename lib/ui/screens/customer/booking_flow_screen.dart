@@ -94,7 +94,10 @@ class _BookingFlowState extends State<_BookingFlow> {
           builder: (_) => BookingDetailScreen(bookingId: id!)));
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(draft.chosenProvider != null
+          content: Text(draft.recurrence.isRecurring
+              ? 'Plan request sent. Your cleaner commits to all '
+                  '${draft.totalVisits} visits when they accept.'
+              : draft.chosenProvider != null
               ? 'Request sent to ${draft.chosenProvider!.displayName}.'
               : 'Request sent to cleaners in ${draft.address!.barangay.name}.'),
         ));
@@ -171,7 +174,9 @@ class _EstimateBar extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(draft.chosenProvider != null ? 'Price' : 'Estimated price',
+                  Text(
+                      '${draft.chosenProvider != null ? 'Price' : 'Estimated price'}'
+                      '${draft.recurrence.isRecurring ? ' per visit' : ''}',
                       style: TextStyle(
                           fontSize: 12, color: scheme.onSurfaceVariant)),
                   AnimatedSwitcher(
@@ -345,6 +350,65 @@ class _ScheduleStep extends StatelessWidget {
             ],
           ),
         ),
+        const SizedBox(height: 20),
+        const _FrequencyPicker(),
+      ],
+    );
+  }
+}
+
+/// One-time or a recurring plan with the same cleaner.
+class _FrequencyPicker extends StatelessWidget {
+  const _FrequencyPicker();
+
+  @override
+  Widget build(BuildContext context) {
+    final draft = context.watch<BookingDraft>();
+    final scheme = Theme.of(context).colorScheme;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SectionTitle('How often?'),
+        for (final r in Recurrence.values) ...[
+          _SelectTile(
+            selected: draft.recurrence == r,
+            icon: r.isRecurring ? Icons.repeat_rounded : Icons.event_rounded,
+            title: r.isRecurring
+                ? '${r.label} · save ${(r.discount * 100).round()}%'
+                : r.label,
+            subtitle: switch (r) {
+              Recurrence.none => 'Just this date.',
+              Recurrence.weekly => 'Same cleaner, same day and time each week.',
+              Recurrence.biweekly => 'Same cleaner, every other week.',
+            },
+            onTap: () => draft.setRecurrence(r),
+          ),
+          const SizedBox(height: 8),
+        ],
+        if (draft.recurrence.isRecurring) ...[
+          const SizedBox(height: 8),
+          Text('Number of visits',
+              style: TextStyle(
+                  color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              for (final n in Business.planVisitOptions)
+                ChoiceChip(
+                  label: Text('$n visits'),
+                  selected: draft.totalVisits == n,
+                  onSelected: (_) => draft.setTotalVisits(n),
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Text(
+            'You pay per visit. The next visit is booked automatically after '
+            'each one, and you can skip a visit or end the plan anytime.',
+            style: TextStyle(fontSize: 12.5, color: scheme.onSurfaceVariant),
+          ),
+        ],
       ],
     );
   }
@@ -578,6 +642,11 @@ class _ReviewStep extends StatelessWidget {
                         ? '—'
                         : '${formatDate(draft.date!)}, ${draft.timeSlot ?? ''}',
                     1),
+                if (draft.recurrence.isRecurring)
+                  row(
+                      'Repeats',
+                      '${draft.recurrence.label} · ${draft.totalVisits} visits',
+                      1),
                 row('Where', draft.address?.fullLabel ?? '—', 2),
                 row(
                     'Cleaner',
@@ -616,11 +685,18 @@ class _ReviewStep extends StatelessWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: Text(
-                    p != null
-                        ? 'Total: ${peso(est.min)}. No extra fees for you.'
-                        : 'Expected ${pesoRange(est.min, est.max)} depending on '
-                            'who accepts. You\'ll see the final price before '
-                            'paying.',
+                    [
+                      p != null
+                          ? '${draft.recurrence.isRecurring ? 'Per visit' : 'Total'}: '
+                              '${peso(est.min)}. No extra fees for you.'
+                          : 'Expected ${pesoRange(est.min, est.max)}'
+                              '${draft.recurrence.isRecurring ? ' per visit' : ''} '
+                              'depending on who accepts. You\'ll see the final '
+                              'price before paying.',
+                      if (draft.recurrence.isRecurring)
+                        'Includes your ${(draft.recurrence.discount * 100).round()}% '
+                            'plan discount.',
+                    ].join(' '),
                     style: const TextStyle(height: 1.35),
                   ),
                 ),

@@ -60,6 +60,15 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Pick a date'), findsOneWidget);
     expect(find.text('Pick a start time'), findsOneWidget);
+
+    // Choosing a weekly plan shows visit counts and a per-visit price.
+    final weekly = find.text('Every week · save 10%');
+    await tester.ensureVisible(weekly);
+    await tester.pumpAndSettle();
+    await tester.tap(weekly);
+    await tester.pumpAndSettle();
+    expect(find.text('8 visits'), findsOneWidget);
+    expect(find.text('Estimated price per visit'), findsOneWidget);
   });
 
   testWidgets('provider sees the open Buhangin request and can open it',
@@ -76,6 +85,13 @@ void main() {
     await tester.tap(find.text('My jobs'));
     await tester.pumpAndSettle();
     expect(find.text('Ben Tan'), findsOneWidget);
+    expect(find.text('Every week · visit 1 of 8'), findsOneWidget);
+
+    await tester.tap(find.text('Ben Tan'));
+    await tester.pumpAndSettle();
+    expect(find.text('Recurring plan'), findsOneWidget);
+    expect(find.text('Active'), findsOneWidget);
+    expect(find.text('End plan'), findsOneWidget);
   });
 
   testWidgets('admin approves a pending cleaner', (tester) async {

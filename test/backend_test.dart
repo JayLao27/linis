@@ -63,6 +63,8 @@ void main() {
       TierFilter tier = TierFilter.any,
       ServiceType service = ServiceType.regular,
       HomeSize size = HomeSize.small,
+      Recurrence recurrence = Recurrence.none,
+      int totalVisits = 1,
     }) =>
         Booking(
           id: '',
@@ -78,6 +80,8 @@ void main() {
           estimateMin: 0,
           estimateMax: 0,
           paymentMethod: method,
+          recurrence: recurrence,
+          totalVisits: totalVisits,
         );
 
     Future<ProviderProfile> provider() async =>
@@ -281,6 +285,121 @@ void main() {
       final b = (await be.bookings.watch(id).first)!;
       expect(b.status, BookingStatus.cancelled);
       expect(b.paymentStatus, PaymentStatus.refunded);
+    });
+
+    group('recurring plans', () {
+      Future<void> runVisit(String id, {bool accept = false}) async {
+        if (accept) await be.bookings.accept(id, providerId);
+        await be.bookings.start(id, providerId);
+        await be.bookings.finish(id, providerId);
+        await be.bookings.confirmCompletion(id, customerId);
+      }
+
+      test('weekly plan: discounted price, next visit follows completion',
+          () async {
+        final first = draft(
+            method: PaymentMethod.cash,
+            recurrence: Recurrence.weekly,
+            totalVisits: 4);
+        final id = await be.bookings.create(first);
+        var b = (await be.bookings.watch(id).first)!;
+        expect(b.planId, isNotNull);
+        expect(b.visitNumber, 1);
+
+        await be.bookings.accept(id, providerId);
+        b = (await be.bookings.watch(id).first)!;
+        expect(b.price, 630); // 700 less 10%, rounded to ₱10
+
+        var plan = (await be.bookings.watchPlan(b.planId!).first)!;
+        expect(plan.providerId, providerId);
+        expect(plan.pricePerVisit, 630);
+
+        await runVisit(id);
+        plan = (await be.bookings.watchPlan(b.planId!).first)!;
+        expect(plan.completedVisits, 1);
+        expect(plan.visitsCreated, 2);
+
+        final next = (await be.bookings.watch(plan.currentBookingId!).first)!;
+        expect(next.status, BookingStatus.accepted);
+        expect(next.providerId, providerId);
+        expect(next.price, 630);
+        expect(next.visitNumber, 2);
+        expect(next.scheduledDate.difference(first.scheduledDate).inDays, 7);
+
+        final notes = await be.notifications.watch(customerId).first;
+        expect(notes.any((n) => n.title == 'Next cleaning scheduled'), isTrue);
+      });
+
+      test('skipping a visit schedules the one after it', () async {
+        final id = await be.bookings.create(draft(
+            method: PaymentMethod.cash,
+            recurrence: Recurrence.biweekly,
+            totalVisits: 4));
+        await be.bookings.accept(id, providerId);
+        final b = (await be.bookings.watch(id).first)!;
+
+        await be.bookings.cancel(id, customerId, reason: 'Away');
+        final plan = (await be.bookings.watchPlan(b.planId!).first)!;
+        expect(plan.active, isTrue);
+        expect(plan.completedVisits, 0);
+        final next = (await be.bookings.watch(plan.currentBookingId!).first)!;
+        expect(next.visitNumber, 2);
+        expect(next.scheduledDate.difference(b.scheduledDate).inDays, 14);
+      });
+
+      test('plan closes after its last visit', () async {
+        final id = await be.bookings.create(draft(
+            method: PaymentMethod.cash,
+            recurrence: Recurrence.weekly,
+            totalVisits: 4));
+        await runVisit(id, accept: true);
+        final planId = (await be.bookings.watch(id).first)!.planId!;
+        for (var i = 0; i < 3; i++) {
+          final plan = (await be.bookings.watchPlan(planId).first)!;
+          await runVisit(plan.currentBookingId!);
+        }
+        final plan = (await be.bookings.watchPlan(planId).first)!;
+        expect(plan.active, isFalse);
+        expect(plan.completedVisits, 4);
+        expect(plan.currentBookingId, isNull);
+        expect(plan.endedBy, isNull);
+        expect((await provider()).completedJobs, 4);
+      });
+
+      test('ending a plan cancels and refunds the open visit', () async {
+        final id = await be.bookings.create(
+            draft(recurrence: Recurrence.weekly, totalVisits: 8));
+        await be.bookings.accept(id, providerId);
+        await be.bookings.recordGcashPayment(id, 'REF');
+        final planId = (await be.bookings.watch(id).first)!.planId!;
+
+        await be.bookings.endPlan(planId, customerId);
+        final b = (await be.bookings.watch(id).first)!;
+        expect(b.status, BookingStatus.cancelled);
+        expect(b.paymentStatus, PaymentStatus.refunded);
+        final plan = (await be.bookings.watchPlan(planId).first)!;
+        expect(plan.active, isFalse);
+        expect(plan.endedBy, customerId);
+        expect(() => be.bookings.endPlan(planId, customerId),
+            throwsA(isA<BookingException>()));
+      });
+
+      test('cancelling before anyone accepts ends the plan', () async {
+        final id = await be.bookings.create(
+            draft(recurrence: Recurrence.weekly, totalVisits: 4));
+        await be.bookings.cancel(id, customerId);
+        final planId = (await be.bookings.watch(id).first)!.planId!;
+        final plan = (await be.bookings.watchPlan(planId).first)!;
+        expect(plan.active, isFalse);
+        expect(plan.visitsCreated, 1);
+      });
+
+      test('late confirmation moves the next visit past today', () {
+        final now = DateTime(2026, 9, 22);
+        final next = BookingRepository.nextVisitDate(
+            DateTime(2026, 9, 1), Recurrence.weekly, now);
+        expect(next, DateTime(2026, 9, 22));
+      });
     });
   });
 

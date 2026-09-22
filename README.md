@@ -98,6 +98,16 @@ areas, which is Firestore's `whereIn` limit.
   ₱1,500 owed, new bookings pause until the provider settles via GCash or an
   admin marks the balance as settled.
 
+**Recurring plans:** a customer can book a clean every week (10% off) or every
+2 weeks (5% off) for 4, 8 or 12 visits. The first visit goes out like any
+request. The provider who accepts it commits to the whole plan at that
+per-visit price (stored in `plans/{id}`). When a visit is confirmed done or
+skipped, the next one is created automatically as an accepted booking with the
+same provider, slot and price, one interval later. The customer pays each visit
+separately. Either side can skip a single visit or end the plan. Ending a plan
+cancels the open visit and refunds it if it was paid by GCash. In the demo,
+Ben's job with Maria is visit 1 of a weekly plan.
+
 ## Known limitations
 
 - **GCash is simulated** (`SimulatedGCashGateway`). A real integration needs a

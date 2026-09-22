@@ -100,6 +100,21 @@ enum BookingStatus {
       this != BookingStatus.completed && this != BookingStatus.cancelled;
 }
 
+/// How often a booking repeats. Recurring visits go to the same provider at a
+/// discounted per-visit price.
+enum Recurrence {
+  none('One-time', 0, 0),
+  weekly('Every week', 7, Business.weeklyDiscount),
+  biweekly('Every 2 weeks', 14, Business.biweeklyDiscount);
+
+  const Recurrence(this.label, this.intervalDays, this.discount);
+  final String label;
+  final int intervalDays;
+  final double discount;
+
+  bool get isRecurring => this != Recurrence.none;
+}
+
 enum LedgerType {
   gcashRelease('GCash payout'),
   cashCommissionDue('Commission due (cash job)'),

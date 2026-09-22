@@ -5,9 +5,12 @@ import '../../../core/format.dart';
 import '../../../data/backend.dart';
 import '../../../data/models/booking.dart';
 import '../../../data/models/enums.dart';
+import '../../../data/models/recurring_plan.dart';
 import '../../../data/models/review.dart';
+import '../../../data/repositories/booking_repository.dart';
 import '../../../state/session_controller.dart';
 import '../../theme.dart';
+import '../../widgets/booking_actions.dart';
 import '../../widgets/common.dart';
 import '../../widgets/marketplace.dart';
 import '../../widgets/sheets.dart';
@@ -58,7 +61,8 @@ class _BookingDetailView extends StatelessWidget {
         ? context
             .read<Backend>()
             .pricing
-            .quoteFor(session.provider!, b.serviceType, b.homeSize)
+            .quoteFor(
+                session.provider!, b.serviceType, b.homeSize, b.recurrence)
         : null;
 
     return Scaffold(
@@ -101,6 +105,10 @@ class _BookingDetailView extends StatelessWidget {
               ),
             ),
           ),
+          if (b.isRecurring) ...[
+            const SizedBox(height: 12),
+            _PlanSection(booking: b),
+          ],
           const SizedBox(height: 12),
           if (isCustomer) _ProviderSection(booking: b) else _CustomerSection(booking: b),
           const SizedBox(height: 12),
@@ -538,13 +546,11 @@ class _ActionBar extends StatelessWidget {
           },
         ),
         AsyncButton(
-          label: 'Accept · ${peso(backend.pricing.quoteFor(me, b.serviceType, b.homeSize))}',
+          label: '${b.isRecurring ? 'Accept plan' : 'Accept'} · '
+              '${peso(backend.pricing.quoteFor(me, b.serviceType, b.homeSize, b.recurrence))}',
           icon: Icons.check_rounded,
-          onPressed: me.canAcceptJobs
-              ? () => runGuarded(
-                  context, () => backend.bookings.accept(b.id, me.uid),
-                  success: 'Job accepted. The customer has been notified.')
-              : null,
+          onPressed:
+              me.canAcceptJobs ? () => acceptJob(context, b, me) : null,
         ),
       ];
     }
@@ -598,6 +604,22 @@ class _ActionBar extends StatelessWidget {
   Future<void> _cancel(BuildContext context) async {
     final backend = context.read<Backend>();
     final uid = context.read<SessionController>().uid;
+    final b = booking;
+    // A plan visit with a cleaner can be skipped without ending the plan.
+    if (b.isRecurring &&
+        b.providerId != null &&
+        b.visitNumber < b.totalVisits) {
+      final endPlan = await _askSkipOrEnd(context);
+      if (endPlan == null || !context.mounted) return;
+      await runGuarded(
+        context,
+        () => backend.bookings.cancel(b.id, uid,
+            reason: endPlan ? 'Plan ended' : 'Visit skipped',
+            endPlan: endPlan),
+        success: endPlan ? 'Plan ended.' : 'Visit skipped. Next one is booked.',
+      );
+      return;
+    }
     final reason = await textInputDialog(context,
         title: 'Cancel booking?',
         label: 'Reason (optional)',
@@ -607,6 +629,48 @@ class _ActionBar extends StatelessWidget {
     await runGuarded(
         context, () => backend.bookings.cancel(booking.id, uid, reason: reason),
         success: 'Booking cancelled.');
+  }
+
+  /// Returns true to end the plan, false to skip only this visit.
+  Future<bool?> _askSkipOrEnd(BuildContext context) {
+    final b = booking;
+    final next = BookingRepository.nextVisitDate(b.scheduledDate, b.recurrence);
+    return showModalBottomSheet<bool>(
+      context: context,
+      showDragHandle: true,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(8, 0, 8, 16),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Padding(
+                padding: EdgeInsets.fromLTRB(16, 0, 16, 8),
+                child: Text('Cancel this visit?',
+                    style:
+                        TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+              ),
+              ListTile(
+                leading: const Icon(Icons.skip_next_rounded),
+                title: const Text('Skip this visit only'),
+                subtitle: Text('The plan continues. Next visit: '
+                    '${formatDate(next)}, ${b.timeSlot}.'),
+                onTap: () => Navigator.pop(ctx, false),
+              ),
+              ListTile(
+                leading:
+                    const Icon(Icons.stop_circle_outlined, color: LinisColors.danger),
+                title: const Text('End the whole plan',
+                    style: TextStyle(color: LinisColors.danger)),
+                subtitle: Text('No more visits after this. '
+                    '${b.paymentStatus == PaymentStatus.held ? 'This visit is refunded.' : ''}'),
+                onTap: () => Navigator.pop(ctx, true),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 
   Future<void> _rate(BuildContext context) async {
@@ -636,6 +700,125 @@ class _ActionBar extends StatelessWidget {
         comment: result.comment,
       ),
       success: 'Thanks for your rating!',
+    );
+  }
+}
+
+/// Recurring-plan summary on a visit. Participants see live plan status and
+/// can end it; a provider looking at an open plan request sees the terms.
+class _PlanSection extends StatelessWidget {
+  const _PlanSection({required this.booking});
+  final Booking booking;
+
+  @override
+  Widget build(BuildContext context) {
+    final b = booking;
+    final session = context.read<SessionController>();
+    final isParticipant =
+        session.uid == b.customerId || session.uid == b.providerId;
+    if (!isParticipant) return _card(context, null);
+    return StreamBuilder<RecurringPlan?>(
+      stream: context.read<Backend>().bookings.watchPlan(b.planId!),
+      builder: (context, snap) => _card(context, snap.data),
+    );
+  }
+
+  Widget _card(BuildContext context, RecurringPlan? plan) {
+    final b = booking;
+    final scheme = Theme.of(context).colorScheme;
+    final session = context.read<SessionController>();
+    final isCurrent = plan?.currentBookingId == b.id;
+    final upcoming = plan != null && plan.active && isCurrent
+        ? plan.upcomingDates(b.scheduledDate)
+        : const <DateTime>[];
+    final (statusText, statusColor) = plan == null
+        ? ('Plan request', LinisColors.warning)
+        : plan.active
+            ? ('Active', LinisColors.success)
+            : plan.endedBy == null
+                ? ('Completed', LinisColors.brand)
+                : ('Ended', LinisColors.danger);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            SectionTitle(
+              'Recurring plan',
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(statusText,
+                    style: TextStyle(
+                        color: statusColor,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700)),
+              ),
+            ),
+            InfoRow(
+                icon: Icons.repeat_rounded,
+                label: 'Repeats',
+                value: '${b.recurrence.label}, '
+                    '${formatWeekday(b.scheduledDate)}s at ${b.timeSlot}'),
+            InfoRow(
+                icon: Icons.format_list_numbered_rounded,
+                label: 'This visit',
+                value: '${b.visitNumber} of ${b.totalVisits}'
+                    '${plan != null ? ' · ${plan.completedVisits} done' : ''}'),
+            InfoRow(
+                icon: Icons.local_offer_outlined,
+                label: 'Discount',
+                value: '${(b.recurrence.discount * 100).round()}% off every visit'),
+            if (upcoming.isNotEmpty)
+              InfoRow(
+                  icon: Icons.event_repeat_rounded,
+                  label: 'Coming up',
+                  value: upcoming.map(formatShortDate).join(', ') +
+                      (plan!.totalVisits - plan.visitsCreated > upcoming.length
+                          ? '…'
+                          : '')),
+            if (plan != null && !plan.active && plan.endedBy != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 6),
+                child: Text(
+                  'Ended by ${plan.endedBy == plan.customerId ? 'the customer' : 'the cleaner'} '
+                  'after ${plan.completedVisits} of ${plan.totalVisits} visits.',
+                  style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 13),
+                ),
+              ),
+            if (plan != null && plan.active && isCurrent) ...[
+              const SizedBox(height: 12),
+              AsyncButton(
+                label: 'End plan',
+                icon: Icons.stop_circle_outlined,
+                outlined: true,
+                color: LinisColors.danger,
+                onPressed: () async {
+                  final ok = await confirmDialog(context,
+                      title: 'End this plan?',
+                      message: 'No more visits will be booked. '
+                          '${b.status == BookingStatus.pending || b.status == BookingStatus.accepted ? 'This visit is cancelled too.' : 'This visit still finishes.'}',
+                      confirmLabel: 'End plan',
+                      destructive: true);
+                  if (!ok || !context.mounted) return;
+                  await runGuarded(
+                      context,
+                      () => context
+                          .read<Backend>()
+                          .bookings
+                          .endPlan(plan.id, session.uid),
+                      success: 'Plan ended.');
+                },
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 }

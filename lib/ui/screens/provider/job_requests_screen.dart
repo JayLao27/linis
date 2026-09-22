@@ -6,6 +6,7 @@ import '../../../data/backend.dart';
 import '../../../data/models/booking.dart';
 import '../../../state/session_controller.dart';
 import '../../theme.dart';
+import '../../widgets/booking_actions.dart';
 import '../../widgets/common.dart';
 import '../../widgets/marketplace.dart';
 import '../shared/booking_detail_screen.dart';
@@ -73,8 +74,8 @@ class JobRequestsScreen extends StatelessWidget {
                   separatorBuilder: (_, _) => const SizedBox(height: 10),
                   itemBuilder: (context, i) {
                     final b = list[i];
-                    final quote =
-                        backend.pricing.quoteFor(me, b.serviceType, b.homeSize);
+                    final quote = backend.pricing.quoteFor(
+                        me, b.serviceType, b.homeSize, b.recurrence);
                     final share = quote - backend.pricing.split(quote, me.tier).commission;
                     return BookingCard(
                       booking: b,
@@ -128,14 +129,11 @@ class JobRequestsScreen extends StatelessWidget {
                               Expanded(
                                 flex: 2,
                                 child: AsyncButton(
-                                  label: 'Accept · ${peso(quote)}',
+                                  label: b.isRecurring
+                                      ? 'Accept plan · ${peso(quote)}'
+                                      : 'Accept · ${peso(quote)}',
                                   onPressed: me.canAcceptJobs
-                                      ? () => runGuarded(
-                                          context,
-                                          () => backend.bookings
-                                              .accept(b.id, me.uid),
-                                          success:
-                                              'Accepted! Find it under My jobs.')
+                                      ? () => acceptJob(context, b, me)
                                       : null,
                                 ),
                               ),

@@ -304,8 +304,10 @@ class DemoSeed {
     }
 
     Map<String, dynamic> assigned(String providerId, String providerName,
-        ProviderTier tier, double baseRate, ServiceType s, HomeSize h) {
-      final price = pricing.quote(baseRate: baseRate, service: s, size: h);
+        ProviderTier tier, double baseRate, ServiceType s, HomeSize h,
+        [Recurrence recurrence = Recurrence.none]) {
+      final price = pricing.withDiscount(
+          pricing.quote(baseRate: baseRate, service: s, size: h), recurrence);
       final split = pricing.split(price, tier);
       return {
         'providerId': providerId,
@@ -358,7 +360,7 @@ class DemoSeed {
       'createdAt': Timestamp.fromDate(_now.subtract(const Duration(hours: 2))),
     });
 
-    // Ben: Maria has accepted a cash job for later this week.
+    // Ben: visit 1 of a weekly plan with Maria, accepted, tomorrow.
     await bookings.doc('seed-b3').set({
       ...base(
           customerId: 'cust-ben',
@@ -371,10 +373,35 @@ class DemoSeed {
           slot: '1:00 PM',
           method: PaymentMethod.cash),
       ...assigned('prov-maria', 'Maria Santos', ProviderTier.individual, 450,
-          ServiceType.regular, HomeSize.medium),
+          ServiceType.regular, HomeSize.medium, Recurrence.weekly),
       'status': BookingStatus.accepted.name,
+      'requestedProviderId': 'prov-maria',
+      'planId': 'seed-plan1',
+      'recurrence': Recurrence.weekly.name,
+      'visitNumber': 1,
+      'totalVisits': 8,
       'createdAt': Timestamp.fromDate(_daysAgo(1)),
       'acceptedAt': Timestamp.fromDate(_daysAgo(1)),
+    });
+    await _db.collection('plans').doc('seed-plan1').set({
+      'customerId': 'cust-ben',
+      'customerName': 'Ben Tan',
+      'providerId': 'prov-maria',
+      'providerName': 'Maria Santos',
+      'recurrence': Recurrence.weekly.name,
+      'totalVisits': 8,
+      'visitsCreated': 1,
+      'completedVisits': 0,
+      'active': true,
+      'currentBookingId': 'seed-b3',
+      'pricePerVisit': pricing.withDiscount(
+          pricing.quote(
+              baseRate: 450,
+              service: ServiceType.regular,
+              size: HomeSize.medium),
+          Recurrence.weekly),
+      'endedBy': null,
+      'createdAt': Timestamp.fromDate(_daysAgo(1)),
     });
 
     // Ben: an earlier cash job with Maria, completed and rated.

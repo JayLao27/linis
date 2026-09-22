@@ -12,6 +12,8 @@ String formatDate(DateTime d) => DateFormat('EEE, MMM d, yyyy').format(d);
 
 String formatShortDate(DateTime d) => DateFormat('MMM d').format(d);
 
+String formatWeekday(DateTime d) => DateFormat('EEEE').format(d);
+
 String formatDateTime(DateTime d) => DateFormat('MMM d, h:mm a').format(d);
 
 String timeAgo(DateTime d) {

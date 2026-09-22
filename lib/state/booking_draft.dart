@@ -31,6 +31,8 @@ class BookingDraft extends ChangeNotifier {
   String notes = '';
   TierFilter tierFilter;
   PaymentMethod paymentMethod = PaymentMethod.gcash;
+  Recurrence recurrence = Recurrence.none;
+  int totalVisits = Business.planVisitOptions[1];
 
   /// Provider picked from search results or a profile. Null = send the
   /// request to every matching provider.
@@ -44,7 +46,7 @@ class BookingDraft extends ChangeNotifier {
   PriceRange get estimate {
     final p = chosenProvider;
     if (p != null) {
-      final q = _pricing.quoteFor(p, serviceType, homeSize);
+      final q = _pricing.quoteFor(p, serviceType, homeSize, recurrence);
       return PriceRange(q, q);
     }
     return _pricing.estimate(
@@ -52,11 +54,12 @@ class BookingDraft extends ChangeNotifier {
       size: homeSize,
       tierFilter: tierFilter,
       candidates: candidates,
+      recurrence: recurrence,
     );
   }
 
   double quoteFor(ProviderProfile p) =>
-      _pricing.quoteFor(p, serviceType, homeSize);
+      _pricing.quoteFor(p, serviceType, homeSize, recurrence);
 
   /// Candidates narrowed by the tier filter and service type.
   List<ProviderProfile> get visibleCandidates => candidates
@@ -90,6 +93,16 @@ class BookingDraft extends ChangeNotifier {
   void setTierFilter(TierFilter t) {
     tierFilter = t;
     _dropChosenIfIneligible();
+    notifyListeners();
+  }
+
+  void setRecurrence(Recurrence r) {
+    recurrence = r;
+    notifyListeners();
+  }
+
+  void setTotalVisits(int n) {
+    totalVisits = n;
     notifyListeners();
   }
 
@@ -167,6 +180,8 @@ class BookingDraft extends ChangeNotifier {
       estimateMin: est.min,
       estimateMax: est.max,
       paymentMethod: paymentMethod,
+      recurrence: recurrence,
+      totalVisits: recurrence.isRecurring ? totalVisits : 1,
     );
   }
 

@@ -55,17 +55,44 @@ service cloud.firestore {
       allow read: if isAdmin()
         || (signedIn() && (isCustomer() || isAssigned()))
         || (isProvider() && resource.data.status == 'pending');
-      allow create: if signedIn()
-        && request.resource.data.customerId == uid()
-        && request.resource.data.status == 'pending'
-        && request.resource.data.providerId == null
-        && request.resource.data.paymentStatus == 'unpaid';
+      function plan(id) { return get(/databases/$(database)/documents/plans/$(id)).data; }
+
+      allow create: if (signedIn()
+          && request.resource.data.customerId == uid()
+          && request.resource.data.status == 'pending'
+          && request.resource.data.providerId == null
+          && request.resource.data.paymentStatus == 'unpaid')
+        // The next visit of a recurring plan, created by either side when the
+        // previous visit is completed or skipped. It must match the plan.
+        || (signedIn()
+          && request.resource.data.planId != null
+          && plan(request.resource.data.planId).active == true
+          && plan(request.resource.data.planId).customerId == request.resource.data.customerId
+          && plan(request.resource.data.planId).providerId == request.resource.data.providerId
+          && plan(request.resource.data.planId).pricePerVisit == request.resource.data.price
+          && uid() in [request.resource.data.customerId, request.resource.data.providerId]
+          && request.resource.data.status == 'accepted'
+          && request.resource.data.paymentStatus == 'unpaid');
       allow update: if isAdmin()
         || (signedIn() && (isCustomer() || isAssigned()))
         // Accepting or declining an open request.
         || (isProvider() && resource.data.status == 'pending'
             && (request.resource.data.providerId == uid()
                 || onlyChanges(['declinedBy', 'requestedProviderId'])));
+    }
+
+    match /plans/{planId} {
+      allow read: if isAdmin() || (signedIn()
+        && (resource.data.customerId == uid() || resource.data.providerId == uid()));
+      allow create: if signedIn() && request.resource.data.customerId == uid()
+        && request.resource.data.providerId == null
+        && request.resource.data.active == true;
+      allow update: if isAdmin()
+        || (signedIn() && (resource.data.customerId == uid()
+            || resource.data.providerId == uid()))
+        // The provider who accepts the first visit joins the plan.
+        || (isProvider() && resource.data.providerId == null
+            && request.resource.data.providerId == uid());
     }
 
     match /reviews/{reviewId} {

@@ -6,6 +6,7 @@ import '../models/booking.dart';
 import '../models/enums.dart';
 import '../models/ledger_entry.dart';
 import '../models/provider_profile.dart';
+import '../models/recurring_plan.dart';
 import '../services/pricing_service.dart';
 import 'notification_repository.dart';
 import 'provider_repository.dart';
@@ -39,6 +40,8 @@ class BookingRepository {
       _db.collection('providers');
   CollectionReference<Map<String, dynamic>> get _ledger =>
       _db.collection('ledger');
+  CollectionReference<Map<String, dynamic>> get _plans =>
+      _db.collection('plans');
 
   Booking _fromSnap(DocumentSnapshot<Map<String, dynamic>> s) =>
       Booking.fromMap(s.id, s.data()!);
@@ -55,6 +58,11 @@ class BookingRepository {
 
   Stream<Booking?> watch(String id) =>
       _col.doc(id).snapshots().map((s) => s.exists ? _fromSnap(s) : null);
+
+  Stream<RecurringPlan?> watchPlan(String planId) => _plans
+      .doc(planId)
+      .snapshots()
+      .map((s) => s.exists ? RecurringPlan.fromMap(s.id, s.data()!) : null);
 
   Stream<List<Booking>> watchForCustomer(String uid) =>
       _col.where('customerId', isEqualTo: uid).snapshots().map(_sorted);
@@ -90,12 +98,36 @@ class BookingRepository {
   /// Returns the new booking id.
   Future<String> create(Booking draft) async {
     _validateDraft(draft);
-    final ref = await _col.add(draft.toNewDocMap());
+    final ref = _col.doc();
+    if (draft.recurrence.isRecurring) {
+      final planRef = _plans.doc();
+      await (_db.batch()
+            ..set(ref, {
+              ...draft.toNewDocMap(),
+              'planId': planRef.id,
+              'visitNumber': 1,
+            })
+            ..set(
+                planRef,
+                RecurringPlan.newDoc(
+                  customerId: draft.customerId,
+                  customerName: draft.customerName,
+                  recurrence: draft.recurrence,
+                  totalVisits: draft.totalVisits,
+                  firstBookingId: ref.id,
+                )))
+          .commit();
+    } else {
+      await ref.set(draft.toNewDocMap());
+    }
 
-    final String title = 'New ${draft.serviceType.label.toLowerCase()} request';
+    final String title = draft.recurrence.isRecurring
+        ? 'New ${draft.recurrence.label.toLowerCase()} plan request'
+        : 'New ${draft.serviceType.label.toLowerCase()} request';
     final String body =
         '${draft.homeSize.label} in ${draft.address.barangay.name} on '
-        '${formatDate(draft.scheduledDate)}, ${draft.timeSlot}.';
+        '${formatDate(draft.scheduledDate)}, ${draft.timeSlot}.'
+        '${draft.recurrence.isRecurring ? ' ${draft.totalVisits} visits, ${draft.serviceType.label.toLowerCase()}.' : ''}';
     if (draft.requestedProviderId != null) {
       await _notifications.notify(
           userId: draft.requestedProviderId!,
@@ -126,6 +158,10 @@ class BookingRepository {
       throw BookingException('Add your complete address.');
     }
     if (b.timeSlot.isEmpty) throw BookingException('Pick a time.');
+    if (b.recurrence.isRecurring &&
+        !Business.planVisitOptions.contains(b.totalVisits)) {
+      throw BookingException('Pick how many visits the plan should have.');
+    }
     if (b.serviceType.companyOnly && b.tierFilter == TierFilter.individual) {
       throw BookingException(
           '${b.serviceType.label} is only offered by companies.');
@@ -145,6 +181,7 @@ class BookingRepository {
       }
       final b = _fromSnap(bSnap);
       final p = ProviderProfile.fromMap(pSnap.id, pSnap.data()!);
+      final planRef = b.planId == null ? null : _plans.doc(b.planId);
 
       if (b.status != BookingStatus.pending || b.providerId != null) {
         throw BookingException('Another provider already took this job.');
@@ -163,8 +200,18 @@ class BookingRepository {
         throw BookingException('This request was sent to another provider.');
       }
 
-      final price = pricing.quoteFor(p, b.serviceType, b.homeSize);
+      // Accepting the first visit of a plan commits to every visit at this
+      // discounted price.
+      final price =
+          pricing.quoteFor(p, b.serviceType, b.homeSize, b.recurrence);
       final split = pricing.split(price, p.tier);
+      if (planRef != null) {
+        tx.update(planRef, {
+          'providerId': p.uid,
+          'providerName': p.displayName,
+          'pricePerVisit': price,
+        });
+      }
       tx.update(bSnap.reference, {
         'providerId': p.uid,
         'providerName': p.displayName,
@@ -182,7 +229,8 @@ class BookingRepository {
     final provider = await _providers.get(providerId);
     await _notifications.notify(
       userId: booking.customerId,
-      title: '${provider?.displayName ?? 'A cleaner'} accepted your booking',
+      title: '${provider?.displayName ?? 'A cleaner'} accepted your '
+          '${booking.isRecurring ? '${booking.recurrence.label.toLowerCase()} plan' : 'booking'}',
       body: booking.paymentMethod == PaymentMethod.gcash
           ? 'Pay through GCash to lock in ${formatDate(booking.scheduledDate)}.'
           : 'See you on ${formatDate(booking.scheduledDate)}, ${booking.timeSlot}.',
@@ -289,6 +337,7 @@ class BookingRepository {
       final pRef = _providerCol.doc(b.providerId);
       final pSnap = await tx.get(pRef);
       final p = ProviderProfile.fromMap(pSnap.id, pSnap.data()!);
+      final plan = await _readPlan(tx, b.planId);
 
       final commission = b.commissionAmount ?? 0;
       final share = b.providerShare ?? (b.displayPrice - commission);
@@ -316,8 +365,15 @@ class BookingRepository {
             bookingId: b.id,
             reference: b.paymentRef,
           ));
+      final next = _advancePlan(tx, plan, b, completed: true);
       final owedAfter = p.unsettledCommission + (isCash ? commission : 0);
-      return (booking: b, owedAfter: owedAfter, isCash: isCash, share: share);
+      return (
+        booking: b,
+        owedAfter: owedAfter,
+        isCash: isCash,
+        share: share,
+        next: next,
+      );
     });
 
     final b = result.booking;
@@ -338,14 +394,25 @@ class BookingRepository {
             'start receiving requests again.',
       );
     }
+    await _notifyNextVisit(b, result.next);
   }
 
   /// Either side can cancel before work starts. Held GCash payments are
   /// refunded.
-  Future<void> cancel(String bookingId, String byUid, {String reason = ''}) async {
-    final b = await _db.runTransaction((tx) async {
+  ///
+  /// For a plan visit this skips the visit and schedules the next one, unless
+  /// [endPlan] is set, no provider has accepted the plan yet, or it was the
+  /// last visit.
+  Future<void> cancel(
+    String bookingId,
+    String byUid, {
+    String reason = '',
+    bool endPlan = false,
+  }) async {
+    final result = await _db.runTransaction((tx) async {
       final snap = await tx.get(_col.doc(bookingId));
       final b = _fromSnap(snap);
+      final plan = await _readPlan(tx, b.planId);
       if (byUid != b.customerId && byUid != b.providerId) {
         throw BookingException('You cannot cancel this booking.');
       }
@@ -360,9 +427,14 @@ class BookingRepository {
         if (b.paymentStatus == PaymentStatus.held)
           'paymentStatus': PaymentStatus.refunded.name,
       });
-      return b;
+      final next = endPlan || b.providerId == null
+          ? _stopPlan(tx, plan, byUid)
+          : _advancePlan(tx, plan, b, completed: false);
+      return (booking: b, next: next);
     });
 
+    final b = result.booking;
+    await _notifyNextVisit(b, result.next, skipped: true);
     final byCustomer = byUid == b.customerId;
     final otherParty = byCustomer ? b.providerId : b.customerId;
     if (otherParty != null) {
@@ -378,7 +450,140 @@ class BookingRepository {
     }
   }
 
+  /// Stops a plan early. The open visit is cancelled (and refunded) unless the
+  /// cleaner has already started it.
+  Future<void> endPlan(String planId, String byUid) async {
+    final plan = await _db.runTransaction((tx) async {
+      final plan = await _readPlan(tx, planId);
+      if (plan == null || !plan.active) {
+        throw BookingException('This plan has already ended.');
+      }
+      if (byUid != plan.customerId && byUid != plan.providerId) {
+        throw BookingException('You are not part of this plan.');
+      }
+      final currentRef =
+          plan.currentBookingId == null ? null : _col.doc(plan.currentBookingId);
+      final current =
+          currentRef == null ? null : _fromSnap(await tx.get(currentRef));
+      if (current != null &&
+          (current.status == BookingStatus.pending ||
+              current.status == BookingStatus.accepted)) {
+        tx.update(currentRef!, {
+          'status': BookingStatus.cancelled.name,
+          'cancelledBy': byUid,
+          'cancelReason': 'Plan ended',
+          if (current.paymentStatus == PaymentStatus.held)
+            'paymentStatus': PaymentStatus.refunded.name,
+        });
+      }
+      _stopPlan(tx, plan, byUid);
+      return plan;
+    });
+
+    final byCustomer = byUid == plan.customerId;
+    final other = byCustomer ? plan.providerId : plan.customerId;
+    if (other != null) {
+      await _notifications.notify(
+        userId: other,
+        title: '${plan.recurrence.label} plan ended',
+        body: byCustomer
+            ? '${plan.customerName} ended the plan after '
+                '${plan.completedVisits} of ${plan.totalVisits} visits.'
+            : '${plan.providerName} ended the plan. You can book a new '
+                'cleaner anytime.',
+        bookingId: plan.currentBookingId,
+      );
+    }
+  }
+
   // --------------------------------------------------------------- helpers
+
+  Future<RecurringPlan?> _readPlan(Transaction tx, String? planId) async {
+    if (planId == null) return null;
+    final snap = await tx.get(_plans.doc(planId));
+    return snap.exists ? RecurringPlan.fromMap(snap.id, snap.data()!) : null;
+  }
+
+  /// After [visit] is completed or skipped, creates the plan's next visit one
+  /// interval after it, or closes the plan after the last one. Must run after
+  /// the transaction's reads. Returns the new visit, if any.
+  ({String id, DateTime date})? _advancePlan(
+    Transaction tx,
+    RecurringPlan? plan,
+    Booking visit, {
+    required bool completed,
+  }) {
+    if (plan == null || !plan.active) return null;
+    final planRef = _plans.doc(plan.id);
+    final completedInc = {
+      if (completed) 'completedVisits': FieldValue.increment(1),
+    };
+    if (!plan.hasMoreVisits) {
+      tx.update(planRef, {
+        ...completedInc,
+        'active': false,
+        'currentBookingId': null,
+      });
+      return null;
+    }
+    final date = nextVisitDate(visit.scheduledDate, plan.recurrence);
+    final ref = _col.doc();
+    tx.set(ref, visit.nextVisitDoc(date, plan.visitsCreated + 1));
+    tx.update(planRef, {
+      ...completedInc,
+      'visitsCreated': plan.visitsCreated + 1,
+      'currentBookingId': ref.id,
+    });
+    return (id: ref.id, date: date);
+  }
+
+  ({String id, DateTime date})? _stopPlan(
+      Transaction tx, RecurringPlan? plan, String byUid) {
+    if (plan == null || !plan.active) return null;
+    tx.update(_plans.doc(plan.id), {
+      'active': false,
+      'endedBy': byUid,
+      'currentBookingId': null,
+    });
+    return null;
+  }
+
+  /// One interval after [from], moved forward past today if the visit before
+  /// it was confirmed late.
+  static DateTime nextVisitDate(DateTime from, Recurrence r, [DateTime? now]) {
+    final n = now ?? DateTime.now();
+    final today = DateTime(n.year, n.month, n.day);
+    var d = from.add(Duration(days: r.intervalDays));
+    while (d.isBefore(today)) {
+      d = d.add(Duration(days: r.intervalDays));
+    }
+    return d;
+  }
+
+  Future<void> _notifyNextVisit(
+    Booking prev,
+    ({String id, DateTime date})? next, {
+    bool skipped = false,
+  }) async {
+    if (next == null || prev.providerId == null) return;
+    final when = '${formatDate(next.date)}, ${prev.timeSlot}';
+    final payNote = prev.paymentMethod == PaymentMethod.gcash
+        ? ' Pay through GCash before the visit.'
+        : '';
+    await _notifications.notify(
+      userId: prev.customerId,
+      title: skipped ? 'Visit skipped' : 'Next cleaning scheduled',
+      body: 'Your next ${prev.recurrence.label.toLowerCase()} visit with '
+          '${prev.providerName} is on $when.$payNote',
+      bookingId: next.id,
+    );
+    await _notifications.notify(
+      userId: prev.providerId!,
+      title: skipped ? 'Visit skipped' : 'Next visit scheduled',
+      body: 'Next visit with ${prev.customerName} is on $when.',
+      bookingId: next.id,
+    );
+  }
 
   Future<Booking> _transition(
     String bookingId, {

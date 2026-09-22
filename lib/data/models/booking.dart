@@ -49,6 +49,10 @@ class Booking {
     this.createdAt,
     this.acceptedAt,
     this.completedAt,
+    this.planId,
+    this.recurrence = Recurrence.none,
+    this.visitNumber = 1,
+    this.totalVisits = 1,
   });
 
   final String id;
@@ -93,6 +97,14 @@ class Booking {
   final DateTime? createdAt;
   final DateTime? acceptedAt;
   final DateTime? completedAt;
+
+  /// Recurring plan this visit belongs to, if any.
+  final String? planId;
+  final Recurrence recurrence;
+  final int visitNumber;
+  final int totalVisits;
+
+  bool get isRecurring => planId != null;
 
   String get barangayCode => address.barangay.code;
   bool get isDirect => requestedProviderId != null;
@@ -153,6 +165,11 @@ class Booking {
         createdAt: readDate(map['createdAt']),
         acceptedAt: readDate(map['acceptedAt']),
         completedAt: readDate(map['completedAt']),
+        planId: map['planId'] as String?,
+        recurrence: enumByName(
+            Recurrence.values, map['recurrence'], Recurrence.none),
+        visitNumber: readInt(map['visitNumber'], 1),
+        totalVisits: readInt(map['totalVisits'], 1),
       );
 
   /// The document written when a customer submits a request.
@@ -182,5 +199,29 @@ class Booking {
         'customerRated': false,
         'providerRated': false,
         'createdAt': FieldValue.serverTimestamp(),
+        'planId': planId,
+        'recurrence': recurrence.name,
+        'visitNumber': visitNumber,
+        'totalVisits': totalVisits,
+      };
+
+  /// The next visit of this booking's plan: same provider, slot, address and
+  /// price, already accepted, on [date].
+  Map<String, dynamic> nextVisitDoc(DateTime date, int visitNumber) => {
+        ...toNewDocMap(),
+        'providerId': providerId,
+        'providerName': providerName,
+        'providerTier': providerTier?.name,
+        'requestedProviderId': providerId,
+        'scheduledDate': Timestamp.fromDate(date),
+        'estimateMin': price,
+        'estimateMax': price,
+        'price': price,
+        'commissionRate': commissionRate,
+        'commissionAmount': commissionAmount,
+        'providerShare': providerShare,
+        'status': BookingStatus.accepted.name,
+        'acceptedAt': FieldValue.serverTimestamp(),
+        'visitNumber': visitNumber,
       };
 }

@@ -32,8 +32,19 @@ class PricingService {
   }) =>
       _round10(baseRate * service.multiplier * size.multiplier);
 
-  double quoteFor(ProviderProfile p, ServiceType service, HomeSize size) =>
-      quote(baseRate: p.baseRate, service: service, size: size);
+  double quoteFor(
+    ProviderProfile p,
+    ServiceType service,
+    HomeSize size, [
+    Recurrence recurrence = Recurrence.none,
+  ]) =>
+      withDiscount(
+          quote(baseRate: p.baseRate, service: service, size: size),
+          recurrence);
+
+  /// Per-visit price after the recurring-plan discount.
+  double withDiscount(double price, Recurrence recurrence) =>
+      recurrence.isRecurring ? _round10(price * (1 - recurrence.discount)) : price;
 
   /// Estimate shown before the customer picks anyone: the spread of quotes
   /// from providers who could take the job, or the platform defaults for the
@@ -43,14 +54,18 @@ class PricingService {
     required HomeSize size,
     required TierFilter tierFilter,
     Iterable<ProviderProfile> candidates = const [],
+    Recurrence recurrence = Recurrence.none,
   }) {
-    final quotes = candidates.map((p) => quoteFor(p, service, size)).toList();
+    final quotes = candidates
+        .map((p) => quoteFor(p, service, size, recurrence))
+        .toList();
     if (quotes.isEmpty) {
       quotes.addAll(ProviderTier.values
           .where((t) => tierFilter.allows(t))
           .where((t) => !service.companyOnly || t == ProviderTier.company)
-          .map((t) =>
-              quote(baseRate: t.defaultBaseRate, service: service, size: size)));
+          .map((t) => withDiscount(
+              quote(baseRate: t.defaultBaseRate, service: service, size: size),
+              recurrence)));
     }
     quotes.sort();
     return PriceRange(quotes.first, quotes.last);

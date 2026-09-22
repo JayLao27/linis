@@ -21,6 +21,11 @@ class Business {
   /// to requests with `barangayCode in serviceAreas`.
   static const int maxServiceAreas = 30;
 
+  /// Recurring plans: discount per visit, and how many visits a plan can have.
+  static const double weeklyDiscount = 0.10;
+  static const double biweeklyDiscount = 0.05;
+  static const List<int> planVisitOptions = [4, 8, 12];
+
   /// Davao City in the PSGC.
   static const String davaoRegionCode = '110000000';
   static const String davaoProvinceCode = '112400000';
