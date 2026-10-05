@@ -99,6 +99,39 @@ class _AsyncButtonState extends State<AsyncButton> {
   }
 }
 
+/// The "Continue with Google" button on the login and register screens.
+class GoogleButton extends StatelessWidget {
+  const GoogleButton({super.key, required this.onPressed});
+  final Future<void> Function() onPressed;
+
+  @override
+  Widget build(BuildContext context) => AsyncButton(
+        label: 'Continue with Google',
+        icon: Icons.g_mobiledata_rounded,
+        outlined: true,
+        onPressed: onPressed,
+      );
+}
+
+/// A line with the word "or" in the middle.
+class OrDivider extends StatelessWidget {
+  const OrDivider({super.key});
+
+  @override
+  Widget build(BuildContext context) => Row(
+        children: [
+          const Expanded(child: Divider()),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Text('or',
+                style: TextStyle(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant)),
+          ),
+          const Expanded(child: Divider()),
+        ],
+      );
+}
+
 /// Shows an image from Cloudinary, the in-memory demo store, or a placeholder
 /// for seeded sample documents.
 class AppImage extends StatelessWidget {
@@ -142,14 +175,19 @@ class AppImage extends StatelessWidget {
       width: width,
       color: scheme.surfaceContainerHighest,
       alignment: Alignment.center,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.description_outlined, color: scheme.onSurfaceVariant),
-          const SizedBox(height: 4),
-          Text(label,
-              style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12)),
-        ],
+      padding: const EdgeInsets.all(4),
+      // Shrinks the icon and label so they still fit in a small thumbnail.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.description_outlined, color: scheme.onSurfaceVariant),
+            const SizedBox(height: 4),
+            Text(label,
+                style: TextStyle(color: scheme.onSurfaceVariant, fontSize: 12)),
+          ],
+        ),
       ),
     );
   }
