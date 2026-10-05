@@ -4,6 +4,10 @@
 ///   flutter run --dart-define=LINIS_BACKEND=firebase \
 ///     --dart-define=CLOUDINARY_CLOUD_NAME=xxx \
 ///     --dart-define=CLOUDINARY_UPLOAD_PRESET=yyy  -> live Firebase + Cloudinary
+///
+/// Google sign-in on Android reads its web client ID from
+/// `google-services.json`. Pass `--dart-define=GOOGLE_SERVER_CLIENT_ID=zzz`
+/// only if that file is not picked up.
 class AppConfig {
   AppConfig._();
 
@@ -19,6 +23,9 @@ class AppConfig {
 
   static bool get cloudinaryConfigured =>
       cloudinaryCloudName.isNotEmpty && cloudinaryUploadPreset.isNotEmpty;
+
+  static const String googleServerClientId =
+      String.fromEnvironment('GOOGLE_SERVER_CLIENT_ID');
 
   static const String psgcBaseUrl = 'https://psgc.gitlab.io/api';
 }
