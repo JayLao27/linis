@@ -71,6 +71,71 @@ void main() {
     expect(find.text('Estimated price per visit'), findsOneWidget);
   });
 
+  testWidgets('new customer signs up with Google', (tester) async {
+    final backend = await _pumpApp(tester);
+    await tester.tap(find.text('Book a cleaner'));
+    await tester.pumpAndSettle();
+
+    final google = find.text('Continue with Google');
+    await tester.ensureVisible(google);
+    await tester.pumpAndSettle();
+
+    // The terms must be accepted first.
+    await tester.tap(google);
+    await tester.pumpAndSettle();
+    expect(find.text('Please agree to the terms to continue.'), findsOneWidget);
+    expect(backend.auth.currentUid, isNull);
+
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(google);
+    await tester.pumpAndSettle();
+    expect(find.text('Hi Juan!'), findsOneWidget);
+  });
+
+  testWidgets('customer views, edits and deletes a saved place',
+      (tester) async {
+    final backend = await _pumpApp(tester);
+    await _login(tester, DemoSeed.customerEmail);
+    await tester.tap(find.text('Account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Saved places'));
+    await tester.pumpAndSettle();
+    expect(find.text('Rental condo'), findsOneWidget);
+    expect(find.textContaining('Emily Homes'), findsOneWidget);
+
+    // Edit: rename the condo.
+    await tester.tap(find.text('Rental condo'));
+    await tester.pumpAndSettle();
+    expect(find.text('Edit place'), findsOneWidget);
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Name'), 'Beach condo');
+    await tester.scrollUntilVisible(find.text('Save changes'), 300,
+        scrollable: find
+            .descendant(
+                of: find.byType(ListView), matching: find.byType(Scrollable))
+            .first);
+    await tester.ensureVisible(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Save changes'));
+    await tester.pumpAndSettle();
+    expect(find.text('Beach condo'), findsOneWidget);
+    expect(find.text('Rental condo'), findsNothing);
+
+    // Delete it from the card menu.
+    await tester.tap(find.byTooltip('More').first);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Delete'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
+    await tester.pumpAndSettle();
+    expect(find.text('Beach condo'), findsNothing);
+
+    final left = await tester
+        .runAsync(() => backend.places.watchFor('cust-carla').first);
+    expect(left!.single.label, 'Home');
+  });
+
   testWidgets('provider sees the open Buhangin request and can open it',
       (tester) async {
     await _pumpApp(tester);
