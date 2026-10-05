@@ -257,7 +257,7 @@ class DemoSeed {
     });
   }
 
-  /// Carla's saved places. The photos are stock placeholder images.
+  /// Sample saved places for Carla. The photos are placeholder images.
   Future<void> _places() async {
     Future<void> place(String id, String label, HomeSize size, Address address,
             String notes, int createdDaysAgo) =>
