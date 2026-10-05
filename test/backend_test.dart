@@ -6,6 +6,8 @@ import 'package:linis/data/models/booking.dart';
 import 'package:linis/data/models/enums.dart';
 import 'package:linis/data/models/provider_profile.dart';
 import 'package:linis/data/models/review.dart';
+import 'package:linis/data/models/saved_place.dart';
+import 'package:linis/data/repositories/auth_repository.dart';
 import 'package:linis/data/repositories/booking_repository.dart';
 import 'package:linis/data/services/pricing_service.dart';
 
@@ -490,6 +492,94 @@ void main() {
             DateTime(2026, 9, 1), Recurrence.weekly, now);
         expect(next, DateTime(2026, 9, 22));
       });
+    });
+  });
+
+  group('Saved places', () {
+    SavedPlace place({String label = 'Home', String imageUrl = 'memory://p/0'}) =>
+        SavedPlace(
+          id: '',
+          ownerId: 'owner-1',
+          label: label,
+          homeSize: HomeSize.medium,
+          address: DemoSeed.addressIn(DemoSeed.buhangin, 'Blk 5 Lot 8'),
+          imageUrl: imageUrl,
+          notes: 'Green gate',
+        );
+
+    test('create, read, update and delete', () async {
+      final be = await Backend.demo(seed: false);
+
+      final id = await be.places.create(place());
+      var list = await be.places.watchFor('owner-1').first;
+      expect(list.single.label, 'Home');
+      expect(list.single.imageUrl, 'memory://p/0');
+      expect(list.single.address.barangay, DemoSeed.buhangin);
+
+      await be.places.update(SavedPlace(
+        id: id,
+        ownerId: 'owner-1',
+        label: 'Beach house',
+        homeSize: HomeSize.large,
+        address: list.single.address,
+        imageUrl: 'memory://p/1',
+      ));
+      list = await be.places.watchFor('owner-1').first;
+      expect(list.single.label, 'Beach house');
+      expect(list.single.homeSize, HomeSize.large);
+      expect(list.single.imageUrl, 'memory://p/1');
+      expect(list.single.ownerId, 'owner-1');
+
+      await be.places.delete(id);
+      expect(await be.places.watchFor('owner-1').first, isEmpty);
+    });
+
+    test('only the owner\'s places are listed', () async {
+      final be = await Backend.demo(seed: false);
+      await be.places.create(place());
+      expect(await be.places.watchFor('someone-else').first, isEmpty);
+    });
+
+    test('a place needs a name and a photo', () async {
+      final be = await Backend.demo(seed: false);
+      expect(() => be.places.create(place(label: '  ')), throwsArgumentError);
+      expect(() => be.places.create(place(imageUrl: '')), throwsArgumentError);
+      expect(await be.places.watchFor('owner-1').first, isEmpty);
+    });
+  });
+
+  group('Google sign-in', () {
+    const google = DemoAuthRepository.googleProfile;
+
+    test('logging in with an unknown Google account is refused', () async {
+      final be = await Backend.demo(seed: false);
+      await expectLater(
+          be.continueWithGoogle(), throwsA(isA<AuthException>()));
+      expect(be.auth.currentUid, isNull);
+      expect(await be.users.get(google.uid), isNull);
+    });
+
+    test('signing up creates a customer profile, then logging in works',
+        () async {
+      final be = await Backend.demo(seed: false);
+      expect(await be.continueWithGoogle(role: UserRole.customer), isTrue);
+      final user = (await be.users.get(google.uid))!;
+      expect(user.role, UserRole.customer);
+      expect(user.fullName, google.name);
+      expect(user.email, google.email);
+
+      await be.auth.signOut();
+      expect(await be.continueWithGoogle(), isTrue);
+      expect(be.auth.currentUid, google.uid);
+    });
+
+    test('signing up as a cleaner also creates a provider profile', () async {
+      final be = await Backend.demo(seed: false);
+      await be.continueWithGoogle(
+          role: UserRole.provider, tier: ProviderTier.individual);
+      final provider = (await be.providers.get(google.uid))!;
+      expect(provider.displayName, google.name);
+      expect(provider.verificationStatus, VerificationStatus.incomplete);
     });
   });
 
