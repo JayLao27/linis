@@ -16,6 +16,7 @@ class UserRepository {
     required String fullName,
     required String email,
     required String phone,
+    String? photoUrl,
   }) =>
       _users.doc(uid).set(AppUser(
             uid: uid,
@@ -23,6 +24,7 @@ class UserRepository {
             fullName: fullName.trim(),
             email: email.trim(),
             phone: phone.trim(),
+            photoUrl: photoUrl,
           ).toMap());
 
   Stream<AppUser?> watch(String uid) => _users.doc(uid).snapshots().map(
