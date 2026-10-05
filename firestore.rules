@@ -113,6 +113,21 @@ service cloud.firestore {
             && request.resource.data.providerId == uid());
     }
 
+    // A customer's saved places. Private to their owner.
+    match /places/{placeId} {
+      allow read, delete: if signedIn() && resource.data.ownerId == uid();
+      allow create: if signedIn() && request.resource.data.ownerId == uid()
+        && request.resource.data.label is string
+        && request.resource.data.label.size() > 0
+        && request.resource.data.imageUrl is string
+        && request.resource.data.imageUrl.size() > 0;
+      allow update: if signedIn() && resource.data.ownerId == uid()
+        && onlyChanges(['label', 'homeSize', 'address', 'imageUrl', 'notes',
+                        'updatedAt'])
+        && request.resource.data.label.size() > 0
+        && request.resource.data.imageUrl.size() > 0;
+    }
+
     match /reviews/{reviewId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.fromUid == uid()
