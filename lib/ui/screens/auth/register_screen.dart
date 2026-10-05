@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+  import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../../data/backend.dart';
@@ -34,13 +34,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
     super.dispose();
   }
 
-  Future<void> _submit() async {
-    if (!_form.currentState!.validate()) return;
+  /// Checks the terms box is ticked. Shows a reminder if it is not.
+  bool _agreedToTerms() {
     if (!_agree) {
       ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
           content: Text('Please agree to the terms to continue.')));
-      return;
     }
+    return _agree;
+  }
+
+  Future<void> _submit() async {
+    if (!_form.currentState!.validate() || !_agreedToTerms()) return;
     final backend = context.read<Backend>();
     final nav = Navigator.of(context);
     final ok = await runGuarded(
@@ -56,6 +60,32 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
     );
     if (ok) nav.popUntil((r) => r.isFirst);
+  }
+
+  /// Signs up with Google. Google gives us the name, email and photo, so
+  /// the form can stay empty. The phone number is saved only if it is valid.
+  Future<void> _google() async {
+    if (!_agreedToTerms()) return;
+    final backend = context.read<Backend>();
+    final nav = Navigator.of(context);
+    var signedIn = false;
+    await runGuarded(
+      context,
+      () async => signedIn = await backend.continueWithGoogle(
+        role: widget.role,
+        tier: _isProvider ? _tier : null,
+        phone: _phoneError(_phone.text) == null ? _phone.text : '',
+        businessName: _isCompany ? _business.text : null,
+      ),
+    );
+    if (signedIn) nav.popUntil((r) => r.isFirst);
+  }
+
+  String? _phoneError(String? v) {
+    final digits = (v ?? '').replaceAll(RegExp(r'\D'), '');
+    return RegExp(r'^(09|639)\d{9}$').hasMatch(digits)
+        ? null
+        : 'Enter a PH mobile number (09XX XXX XXXX)';
   }
 
   String? _required(String? v) =>
@@ -137,12 +167,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
                     labelText: 'Mobile number',
                     hintText: '09XX XXX XXXX',
                     prefixIcon: Icon(Icons.phone_outlined)),
-                validator: (v) {
-                  final d = (v ?? '').replaceAll(RegExp(r'\D'), '');
-                  return RegExp(r'^(09|639)\d{9}$').hasMatch(d)
-                      ? null
-                      : 'Enter a PH mobile number (09XX XXX XXXX)';
-                },
+                validator: _phoneError,
               ),
               gap,
               TextFormField(
@@ -187,6 +212,10 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 label: _isProvider ? 'Continue to verification' : 'Create account',
                 onPressed: _submit,
               ),
+              const SizedBox(height: 16),
+              const OrDivider(),
+              const SizedBox(height: 16),
+              GoogleButton(onPressed: _google),
             ],
           ),
         ),
