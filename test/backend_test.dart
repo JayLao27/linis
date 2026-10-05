@@ -289,6 +289,118 @@ void main() {
       expect(b.paymentStatus, PaymentStatus.refunded);
     });
 
+    test('login accepts the right password and refuses a wrong one',
+        () async {
+      await be.auth.signOut();
+      expect(() => be.auth.signIn('c@test.ph', 'wrong-password'),
+          throwsA(isA<AuthException>()));
+      expect(be.auth.currentUid, isNull);
+
+      expect(await be.auth.signIn('c@test.ph', 'secret1'), customerId);
+      expect(be.auth.currentUid, customerId);
+    });
+
+    test('an email can only be registered once', () async {
+      expect(
+          () => be.register(
+              email: 'c@test.ph',
+              password: 'secret1',
+              fullName: 'Copy',
+              phone: '09170000002',
+              role: UserRole.customer),
+          throwsA(isA<AuthException>()));
+    });
+
+    test('a new booking is saved as pending, unpaid and unassigned', () async {
+      final id = await be.bookings.create(draft(method: PaymentMethod.cash));
+      final b = (await be.bookings.watch(id).first)!;
+      expect(b.customerId, customerId);
+      expect(b.providerId, isNull);
+      expect(b.status, BookingStatus.pending);
+      expect(b.paymentStatus, PaymentStatus.unpaid);
+      expect(b.paymentMethod, PaymentMethod.cash);
+      expect(b.serviceType, ServiceType.regular);
+      expect(b.address.barangay, DemoSeed.buhangin);
+
+      final mine = await be.bookings.watchForCustomer(customerId).first;
+      expect(mine.map((m) => m.id), [id]);
+      expect(await be.bookings.watchForCustomer('someone-else').first, isEmpty);
+    });
+
+    test('accepting assigns the job, tells the customer and closes the request',
+        () async {
+      final id = await be.bookings.create(draft());
+      await be.bookings.accept(id, providerId);
+
+      final b = (await be.bookings.watch(id).first)!;
+      expect(b.providerId, providerId);
+      final notes = await be.notifications.watch(customerId).first;
+      expect(notes.any((n) => n.bookingId == id), isTrue);
+      final open = await be.bookings.watchOpenRequests(await provider()).first;
+      expect(open.any((o) => o.id == id), isFalse);
+    });
+
+    test('search only returns approved providers that serve the barangay',
+        () async {
+      // A second cleaner who has not been approved yet.
+      final unapproved = await be.register(
+          email: 'p3@test.ph',
+          password: 'secret1',
+          fullName: 'Not Approved',
+          phone: '09170000003',
+          role: UserRole.provider,
+          tier: ProviderTier.individual);
+      await be.providers.saveProfile(
+          (await be.providers.get(unapproved))!.copyWith(
+            serviceAreas: [DemoSeed.buhangin.code],
+            servicesOffered: [ServiceType.regular],
+            baseRate: 400,
+            govIdUrl: 'memory://id',
+          ),
+          submit: true);
+
+      final inBuhangin =
+          await be.providers.matching(barangayCode: DemoSeed.buhangin.code);
+      expect(inBuhangin.map((p) => p.uid), [providerId]);
+
+      final inTalomo =
+          await be.providers.matching(barangayCode: DemoSeed.talomo.code);
+      expect(inTalomo, isEmpty);
+    });
+
+    test('rejecting a provider saves the reason, notifies and hides them',
+        () async {
+      await be.providers.reject(providerId, 'The ID photo is blurry.');
+      final p = await provider();
+      expect(p.verificationStatus, VerificationStatus.rejected);
+      expect(p.rejectionReason, 'The ID photo is blurry.');
+
+      final notes = await be.notifications.watch(providerId).first;
+      expect(notes.any((n) => n.body == 'The ID photo is blurry.'), isTrue);
+      final matches =
+          await be.providers.matching(barangayCode: DemoSeed.buhangin.code);
+      expect(matches, isEmpty);
+    });
+
+    test('a review shows up in the provider\'s review list', () async {
+      final id = await be.bookings.create(draft(method: PaymentMethod.cash));
+      await be.bookings.accept(id, providerId);
+      await be.bookings.start(id, providerId);
+      await be.bookings.finish(id, providerId);
+      await be.bookings.confirmCompletion(id, customerId);
+      await be.reviews.submit(
+          bookingId: id,
+          direction: ReviewDirection.customerToProvider,
+          fromUid: customerId,
+          fromName: 'Test Customer',
+          rating: 5,
+          comment: 'Very thorough');
+
+      final reviews = await be.reviews.watchFor(providerId).first;
+      expect(reviews.single.comment, 'Very thorough');
+      expect(reviews.single.rating, 5);
+    });
+
     group('chat', () {
       Future<String> acceptedJob() async {
         final id = await be.bookings.create(draft(method: PaymentMethod.cash));
@@ -581,6 +693,18 @@ void main() {
       expect(provider.displayName, google.name);
       expect(provider.verificationStatus, VerificationStatus.incomplete);
     });
+  });
+
+  test('provider search can be narrowed to one tier', () async {
+    final be = await Backend.demo();
+    final companies =
+        await be.providers.watchApproved(tier: TierFilter.company).first;
+    final individuals =
+        await be.providers.watchApproved(tier: TierFilter.individual).first;
+    expect(companies, isNotEmpty);
+    expect(individuals, isNotEmpty);
+    expect(companies.every((p) => p.tier == ProviderTier.company), isTrue);
+    expect(individuals.every((p) => p.tier == ProviderTier.individual), isTrue);
   });
 
   test('demo seed signs in and matches Buhangin providers', () async {

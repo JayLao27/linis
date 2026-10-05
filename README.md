@@ -29,29 +29,40 @@ mode only works in **debug** builds.
 The login screen has one-tap buttons for these. On web you can also open
 `?as=customer`, `?as=cleaner`, `?as=company`, `?as=pending` or `?as=admin`.
 
+**Continue with Google** also works in demo mode, but it is simulated. It
+always signs in as the sample account "Juan Dela Cruz". Real Google sign-in
+needs the live Firebase setup below.
+
 ### Live Firebase
 
-1. Create a Firebase project. Enable **Authentication → Email/Password** and
-   **Cloud Firestore**.
+1. Create a Firebase project. Enable **Authentication → Email/Password**,
+   **Authentication → Google** and **Cloud Firestore**.
 2. From this folder:
    ```sh
    dart pub global activate flutterfire_cli
    flutterfire configure
    ```
    This overwrites `lib/firebase_options.dart`.
-3. Deploy the rules and indexes:
+3. For Google sign-in on Android, add your app's SHA-1 key to Firebase:
+   ```sh
+   cd android && ./gradlew signingReport
+   ```
+   Copy the `SHA1` value into **Firebase console → Project settings → Your
+   apps → Android app → Add fingerprint**. Then run `flutterfire configure`
+   again so `android/app/google-services.json` is updated.
+4. Deploy the rules and indexes:
    ```sh
    firebase deploy --only firestore
    ```
-4. (Optional) Create a Cloudinary **unsigned upload preset** for photos, IDs and
-   permits.
-5. Run:
+5. Create a Cloudinary **unsigned upload preset** for photos, IDs and
+   permits. Without it, uploaded photos are only kept until the app restarts.
+6. Run:
    ```sh
    flutter run --dart-define=LINIS_BACKEND=firebase \
      --dart-define=CLOUDINARY_CLOUD_NAME=<cloud> \
      --dart-define=CLOUDINARY_UPLOAD_PRESET=<preset>
    ```
-6. Make an admin: register normally, then change that user's `role` to
+7. Make an admin: register normally, then change that user's `role` to
    `admin` in the Firestore console.
 
 ## Tests
@@ -61,7 +72,8 @@ flutter test
 ```
 
 `test/backend_test.dart` covers pricing, commission, the full booking lifecycle
-(GCash and cash), the settlement cap, two-way ratings, declines and refunds.
+(GCash and cash), the settlement cap, two-way ratings, declines and refunds,
+saved places (create, read, update, delete) and Google sign-in.
 `test/app_flow_test.dart` drives the UI for each role.
 
 ## How it's built
@@ -72,7 +84,7 @@ lib/
   core/          business constants (commission, cap), formatting
   data/
     models/      Firestore documents: users, providers, bookings, reviews,
-                 notifications, ledger
+                 notifications, ledger, places
     repositories/ all reads and writes; money and assignment changes run in
                  Firestore transactions
     services/    pricing, PSGC address API, image uploads, GCash gateway
@@ -116,6 +128,29 @@ previews without loading the conversation. A burst of messages sends one
 notification until the recipient reads them. Chat becomes read-only when the
 booking is completed or cancelled. In the demo, Maria has an unread message
 from Ben.
+
+**Saved places (CRUD):** a customer keeps a list of the homes they get cleaned
+under **Account → Saved places** (`places/{id}` in Firestore). Each place has a
+name, home size, address, notes and a photo.
+
+| Action | Where in the app | Code |
+|---|---|---|
+| Create | **Add place** button, then the form | `PlaceRepository.create` |
+| Read | The list of cards, which updates live | `PlaceRepository.watchFor` |
+| Update | Tap a card, or **⋮ → Edit** | `PlaceRepository.update` |
+| Delete | **⋮ → Delete**, then confirm | `PlaceRepository.delete` |
+
+The list (`SavedPlacesScreen`) and its cards are `StatelessWidget`s because
+they only show data. The form (`PlaceFormScreen`) is a `StatefulWidget` because
+it changes as the user types, picks a size and uploads a photo.
+
+**Google sign-in:** the login and register screens both have a **Continue with
+Google** button. On the register screen it creates the account, using the name,
+email and photo from Google. On the login screen it only lets in Google
+accounts that already have a Linis account, because a new account must first
+choose to be a customer or a cleaner. Accounts made with Google start without a
+mobile number unless one was typed in the form. Customers can add it later
+under **Account → Edit name & phone**.
 
 ## Known limitations
 

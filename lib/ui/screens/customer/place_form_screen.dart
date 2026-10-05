@@ -75,72 +75,77 @@ class _PlaceFormScreenState extends State<PlaceFormScreen> {
       body: SafeArea(
         child: Form(
           key: _form,
-          child: ListView(
+          // A scroll view (not a lazy list) keeps every field built, so the
+          // whole form is always checked when saving.
+          child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-            children: [
-              ImageUploadField(
-                label: 'Photo of the place',
-                hint: 'Tap to add a photo of the front or gate',
-                url: _imageUrl,
-                folder: 'places',
-                onUploaded: (url) => setState(() => _imageUrl = url),
-              ),
-              if (_showErrors && _imageUrl == null)
-                const _FieldError('Add a photo of this place.'),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _label,
-                textCapitalization: TextCapitalization.words,
-                decoration: const InputDecoration(
-                  labelText: 'Name',
-                  hintText: "e.g. Home, Mom's house, Rental condo",
-                  prefixIcon: Icon(Icons.label_outline_rounded),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                ImageUploadField(
+                  label: 'Photo of the place',
+                  hint: 'Tap to add a photo of the front or gate',
+                  url: _imageUrl,
+                  folder: 'places',
+                  onUploaded: (url) => setState(() => _imageUrl = url),
                 ),
-                validator: (v) =>
-                    (v ?? '').trim().isEmpty ? 'Give this place a name' : null,
-              ),
-              const SectionTitle('Home size'),
-              Wrap(
-                spacing: 8,
-                runSpacing: 8,
-                children: [
-                  for (final size in HomeSize.values)
-                    ChoiceChip(
-                      label: Text(size.label),
-                      selected: _size == size,
-                      onSelected: (_) => setState(() => _size = size),
-                    ),
-                ],
-              ),
-              const SectionTitle('Address'),
-              AddressForm(
-                initial: _address,
-                onChanged: (a) => setState(() => _address = a),
-              ),
-              if (_showErrors && _address == null)
-                const _FieldError(
-                    'Complete every field, including house no. and street.'),
-              const SizedBox(height: 16),
-              TextFormField(
-                controller: _notes,
-                maxLines: 3,
-                minLines: 2,
-                textCapitalization: TextCapitalization.sentences,
-                decoration: const InputDecoration(
-                  labelText: 'Notes for the cleaner (optional)',
-                  hintText: 'Gate code, pets, where to park…',
+                if (_showErrors && _imageUrl == null)
+                  const _FieldError('Add a photo of this place.'),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _label,
+                  textCapitalization: TextCapitalization.words,
+                  decoration: const InputDecoration(
+                    labelText: 'Name',
+                    hintText: "e.g. Home, Mom's house, Rental condo",
+                    prefixIcon: Icon(Icons.label_outline_rounded),
+                  ),
+                  validator: (v) =>
+                      (v ?? '').trim().isEmpty ? 'Give this place a name' : null,
                 ),
-              ),
-              const SizedBox(height: 8),
-              Text('Only you can see your saved places.',
-                  style:
-                      TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5)),
-              const SizedBox(height: 20),
-              AsyncButton(
-                label: _isEditing ? 'Save changes' : 'Save place',
-                onPressed: _save,
-              ),
-            ],
+                const SectionTitle('Home size'),
+                Wrap(
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: [
+                    for (final size in HomeSize.values)
+                      ChoiceChip(
+                        label: Text(size.label),
+                        selected: _size == size,
+                        onSelected: (_) => setState(() => _size = size),
+                      ),
+                  ],
+                ),
+                const SectionTitle('Address'),
+                AddressForm(
+                  initial: _address,
+                  onChanged: (a) => setState(() => _address = a),
+                ),
+                if (_showErrors && _address == null)
+                  const _FieldError(
+                      'Complete every field, including house no. and street.'),
+                const SizedBox(height: 16),
+                TextFormField(
+                  controller: _notes,
+                  maxLines: 3,
+                  minLines: 2,
+                  textCapitalization: TextCapitalization.sentences,
+                  decoration: const InputDecoration(
+                    labelText: 'Notes for the cleaner (optional)',
+                    hintText: 'Gate code, pets, where to park…',
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text('Only you can see your saved places.',
+                    style:
+                        TextStyle(color: scheme.onSurfaceVariant, fontSize: 12.5)),
+                const SizedBox(height: 20),
+                AsyncButton(
+                  label: _isEditing ? 'Save changes' : 'Save place',
+                  onPressed: _save,
+                ),
+              ],
+            ),
           ),
         ),
       ),

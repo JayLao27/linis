@@ -71,6 +71,51 @@ void main() {
     expect(find.text('Estimated price per visit'), findsOneWidget);
   });
 
+  testWidgets('a wrong password shows an error and stays on login',
+      (tester) async {
+    final backend = await _pumpApp(tester);
+    await tester.ensureVisible(find.textContaining('Log in'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.textContaining('Log in'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'), DemoSeed.customerEmail);
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'), 'not-the-password');
+    await tester.tap(find.widgetWithText(FilledButton, 'Log in'));
+    await tester.pumpAndSettle();
+    expect(find.text('Incorrect email or password.'), findsOneWidget);
+    expect(find.text('Welcome back'), findsOneWidget);
+    expect(backend.auth.currentUid, isNull);
+  });
+
+  testWidgets('new customer registers with email and lands on home',
+      (tester) async {
+    await _pumpApp(tester);
+    await tester.tap(find.text('Book a cleaner'));
+    await tester.pumpAndSettle();
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Full name'), 'Nina Cruz');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Mobile number'), '09171112222');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Email'), 'nina@test.ph');
+    await tester.enterText(
+        find.widgetWithText(TextFormField, 'Password'), 'secret1');
+    // Close the keyboard so the form can scroll down to the checkbox.
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(Checkbox));
+    await tester.pumpAndSettle();
+    await tester.ensureVisible(find.text('Create account'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Create account'));
+    await tester.pumpAndSettle();
+    expect(find.text('Hi Nina!'), findsOneWidget);
+  });
+
   testWidgets('new customer signs up with Google', (tester) async {
     final backend = await _pumpApp(tester);
     await tester.tap(find.text('Book a cleaner'));
@@ -110,11 +155,9 @@ void main() {
     expect(find.text('Edit place'), findsOneWidget);
     await tester.enterText(
         find.widgetWithText(TextFormField, 'Name'), 'Beach condo');
-    await tester.scrollUntilVisible(find.text('Save changes'), 300,
-        scrollable: find
-            .descendant(
-                of: find.byType(ListView), matching: find.byType(Scrollable))
-            .first);
+    // Close the keyboard so the form can scroll down to the save button.
+    await tester.testTextInput.receiveAction(TextInputAction.done);
+    await tester.pumpAndSettle();
     await tester.ensureVisible(find.text('Save changes'));
     await tester.pumpAndSettle();
     await tester.tap(find.text('Save changes'));
