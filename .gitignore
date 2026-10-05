@@ -46,3 +46,12 @@ app.*.symbols
 
 # Obfuscation related
 app.*.map.json
+
+# Kotlin compiler session files
+android/.kotlin/
+
+# Firebase: local config and logs. Run `flutterfire configure` to create them.
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+.firebase/
+firebase-debug.log

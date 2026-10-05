@@ -2,5 +2,34 @@
   "firestore": {
     "rules": "firestore.rules",
     "indexes": "firestore.indexes.json"
+  },
+  "auth": {
+    "providers": {
+      "emailPassword": true,
+      "googleSignIn": {
+        "oAuthBrandDisplayName": "Linis",
+        "supportEmail": "cjaylao447@gmail.com"
+      }
+    }
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "linis-davao",
+          "appId": "1:677431047787:android:cc99198eeeb3910756a32e",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "linis-davao",
+          "configurations": {
+            "android": "1:677431047787:android:cc99198eeeb3910756a32e",
+            "web": "1:677431047787:web:6ca4c21784b4153156a32e"
+          }
+        }
+      }
+    }
   }
 }
