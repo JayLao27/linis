@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'models/address.dart';
 import 'models/enums.dart';
 import 'models/review.dart';
+import 'models/saved_place.dart';
 import 'repositories/auth_repository.dart';
 import 'services/pricing_service.dart';
 
@@ -52,6 +53,7 @@ class DemoSeed {
     await _users();
     await _providers();
     await _bookingsAndReviews();
+    await _places();
   }
 
   Future<void> _account(String uid, String email, UserRole role, String name,
@@ -253,6 +255,29 @@ class DemoSeed {
       'equipment': ['Industrial vacuum', 'Scaffolding'],
       'createdAt': Timestamp.fromDate(_daysAgo(2)),
     });
+  }
+
+  /// Carla's saved places. The photos are stock placeholder images.
+  Future<void> _places() async {
+    Future<void> place(String id, String label, HomeSize size, Address address,
+            String notes, int createdDaysAgo) =>
+        _db.collection('places').doc(id).set(SavedPlace(
+              id: id,
+              ownerId: 'cust-carla',
+              label: label,
+              homeSize: size,
+              address: address,
+              imageUrl: 'https://picsum.photos/seed/linis-$id/800/450',
+              notes: notes,
+              createdAt: _daysAgo(createdDaysAgo),
+            ).toNewDocMap());
+
+    await place('place-home', 'Home', HomeSize.medium,
+        addressIn(buhangin, 'Blk 5 Lot 8, Emily Homes'),
+        'Green gate. Our dog Bantay is friendly but loud.', 30);
+    await place('place-condo', 'Rental condo', HomeSize.studio,
+        addressIn(matinaCrossing, 'Unit 4B, Palm Residences'),
+        'Get the key card from the lobby guard.', 12);
   }
 
   Future<void> _bookingsAndReviews() async {
