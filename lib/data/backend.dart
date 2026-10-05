@@ -12,6 +12,7 @@ import 'repositories/booking_repository.dart';
 import 'repositories/chat_repository.dart';
 import 'repositories/ledger_repository.dart';
 import 'repositories/notification_repository.dart';
+import 'repositories/place_repository.dart';
 import 'repositories/provider_repository.dart';
 import 'repositories/review_repository.dart';
 import 'repositories/user_repository.dart';
@@ -39,6 +40,7 @@ class Backend {
     reviews = ReviewRepository(db, notifications);
     ledger = LedgerRepository(db, notifications);
     chat = ChatRepository(db, notifications);
+    places = PlaceRepository(db);
   }
 
   final FirebaseFirestore db;
@@ -56,6 +58,7 @@ class Backend {
   late final ReviewRepository reviews;
   late final LedgerRepository ledger;
   late final ChatRepository chat;
+  late final PlaceRepository places;
 
   static Future<Backend> create() {
     if (AppConfig.useFirebase) return firebase();
@@ -112,10 +115,72 @@ class Backend {
     ProviderTier? tier,
     String? businessName,
   }) async {
-    assert(role != UserRole.provider || tier != null);
     final uid = await auth.register(email, password);
+    await _createProfile(
+      uid: uid,
+      email: email,
+      fullName: fullName,
+      phone: phone,
+      role: role,
+      tier: tier,
+      businessName: businessName,
+    );
+    return uid;
+  }
+
+  /// Signs in with Google. Returns false if the user closed the Google prompt.
+  ///
+  /// A Google account seen for the first time needs a [role] to create its
+  /// profile with. The login screen passes none, so it only lets existing
+  /// accounts in.
+  Future<bool> continueWithGoogle({
+    UserRole? role,
+    ProviderTier? tier,
+    String phone = '',
+    String? businessName,
+  }) async {
+    final google = await auth.signInWithGoogle();
+    if (google == null) return false;
+    if (await users.get(google.uid) != null) return true;
+
+    if (role == null) {
+      await auth.signOut();
+      throw AuthException('No Linis account uses that Google account yet. '
+          'Go back and choose how you want to use Linis to create one.');
+    }
+    await _createProfile(
+      uid: google.uid,
+      email: google.email,
+      fullName:
+          google.name.isEmpty ? google.email.split('@').first : google.name,
+      phone: phone,
+      role: role,
+      tier: tier,
+      businessName: businessName,
+      photoUrl: google.photoUrl,
+    );
+    return true;
+  }
+
+  Future<void> _createProfile({
+    required String uid,
+    required String email,
+    required String fullName,
+    required String phone,
+    required UserRole role,
+    ProviderTier? tier,
+    String? businessName,
+    String? photoUrl,
+  }) async {
+    assert(role != UserRole.provider || tier != null);
     await users.create(
-        uid: uid, role: role, fullName: fullName, email: email, phone: phone);
+      uid: uid,
+      role: role,
+      fullName: fullName,
+      email: email,
+      phone: phone,
+      photoUrl: photoUrl,
+    );
     if (role == UserRole.provider) {
       await providers.createDraft(
         uid: uid,
@@ -128,6 +193,5 @@ class Backend {
         businessName: businessName?.trim(),
       );
     }
-    return uid;
   }
 }
