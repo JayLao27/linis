@@ -35,6 +35,15 @@ class _LoginScreenState extends State<LoginScreen> {
     if (ok) nav.popUntil((r) => r.isFirst);
   }
 
+  Future<void> _google() async {
+    final backend = context.read<Backend>();
+    final nav = Navigator.of(context);
+    var signedIn = false;
+    await runGuarded(context,
+        () async => signedIn = await backend.continueWithGoogle());
+    if (signedIn) nav.popUntil((r) => r.isFirst);
+  }
+
   Future<void> _forgot() async {
     final backend = context.read<Backend>();
     final email = _email.text.trim().isNotEmpty
@@ -107,6 +116,10 @@ class _LoginScreenState extends State<LoginScreen> {
               ),
               const SizedBox(height: 8),
               AsyncButton(label: 'Log in', onPressed: _submit),
+              const SizedBox(height: 16),
+              const OrDivider(),
+              const SizedBox(height: 16),
+              GoogleButton(onPressed: _google),
               if (isDemo) ...[
                 const SizedBox(height: 32),
                 const SectionTitle('Try a demo account'),
