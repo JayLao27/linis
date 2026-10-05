@@ -1,5 +1,9 @@
-import 'package:flutter/material.dart';
+import 'dart:typed_data';
 
+import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
+
+import '../../data/backend.dart';
 import '../../data/services/image_upload_service.dart';
 import '../theme.dart';
 
@@ -132,8 +136,8 @@ class OrDivider extends StatelessWidget {
       );
 }
 
-/// Shows an image from Cloudinary, the in-memory demo store, or a placeholder
-/// for seeded sample documents.
+/// Shows a picture from a web link, from the Firebase database, or from
+/// memory. Shows a grey box with a label when there is no picture.
 class AppImage extends StatelessWidget {
   const AppImage({
     super.key,
@@ -153,7 +157,7 @@ class AppImage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final u = url;
-    if (u == null) return _placeholder(context, 'No image');
+    if (u == null) return _placeholder('No image');
     final bytes = MemoryImageStore.get(u);
     if (bytes != null) {
       return Image.memory(bytes, height: height, width: width, fit: fit);
@@ -163,12 +167,85 @@ class AppImage extends StatelessWidget {
           height: height,
           width: width,
           fit: fit,
-          errorBuilder: (_, _, _) => _placeholder(context, 'Image unavailable'));
+          errorBuilder: (_, _, _) => _placeholder('Image unavailable'));
     }
-    return _placeholder(context, placeholderLabel);
+    if (u.startsWith(FirestoreUploadService.scheme)) {
+      // The key makes the picture reload when the URL changes.
+      return _StoredImage(
+          key: ValueKey(u), url: u, height: height, width: width, fit: fit);
+    }
+    // A photo that was only kept in another phone's memory cannot be shown.
+    return _placeholder(
+        u.startsWith('memory://') ? 'Image unavailable' : placeholderLabel);
   }
 
-  Widget _placeholder(BuildContext context, String label) {
+  Widget _placeholder(String label) =>
+      _ImagePlaceholder(label: label, height: height, width: width);
+}
+
+/// A picture saved in the Firebase database. It has to be downloaded first,
+/// so this shows a spinner while it loads.
+class _StoredImage extends StatefulWidget {
+  const _StoredImage({
+    super.key,
+    required this.url,
+    required this.fit,
+    this.height,
+    this.width,
+  });
+
+  final String url;
+  final double? height;
+  final double? width;
+  final BoxFit fit;
+
+  @override
+  State<_StoredImage> createState() => _StoredImageState();
+}
+
+class _StoredImageState extends State<_StoredImage> {
+  late final Future<Uint8List?> _bytes =
+      context.read<Backend>().uploads.fetch(widget.url);
+
+  @override
+  Widget build(BuildContext context) => FutureBuilder<Uint8List?>(
+        future: _bytes,
+        builder: (context, snap) {
+          if (snap.connectionState != ConnectionState.done) {
+            return SizedBox(
+              height: widget.height,
+              width: widget.width,
+              child: const Center(
+                child: SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2)),
+              ),
+            );
+          }
+          final bytes = snap.data;
+          if (bytes == null) {
+            return _ImagePlaceholder(
+                label: 'Image unavailable',
+                height: widget.height,
+                width: widget.width);
+          }
+          return Image.memory(bytes,
+              height: widget.height, width: widget.width, fit: widget.fit);
+        },
+      );
+}
+
+/// The grey box shown in place of a picture.
+class _ImagePlaceholder extends StatelessWidget {
+  const _ImagePlaceholder({required this.label, this.height, this.width});
+
+  final String label;
+  final double? height;
+  final double? width;
+
+  @override
+  Widget build(BuildContext context) {
     final scheme = Theme.of(context).colorScheme;
     return Container(
       height: height,

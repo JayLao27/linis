@@ -1,4 +1,8 @@
+import 'dart:typed_data';
+
+import 'package:fake_cloud_firestore/fake_cloud_firestore.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:linis/core/constants.dart';
 import 'package:linis/data/backend.dart';
 import 'package:linis/data/demo_seed.dart';
@@ -9,6 +13,7 @@ import 'package:linis/data/models/review.dart';
 import 'package:linis/data/models/saved_place.dart';
 import 'package:linis/data/repositories/auth_repository.dart';
 import 'package:linis/data/repositories/booking_repository.dart';
+import 'package:linis/data/services/image_upload_service.dart';
 import 'package:linis/data/services/pricing_service.dart';
 
 void main() {
@@ -660,6 +665,37 @@ void main() {
     });
   });
 
+  group('Photos saved in the database', () {
+    XFile photo(int size) =>
+        XFile.fromData(Uint8List.fromList(List.filled(size, 7)), name: 'p.jpg');
+
+    test('an uploaded photo can be loaded again on another device', () async {
+      final db = FakeFirebaseFirestore();
+      final url = await FirestoreUploadService(db, () => 'owner-1')
+          .upload(photo(2000), folder: 'ids');
+      expect(url, startsWith(FirestoreUploadService.scheme));
+      final saved = (await db.collection('images').get()).docs.single.data();
+      expect(saved['ownerId'], 'owner-1');
+      expect(saved['folder'], 'ids');
+
+      // Another device has nothing in memory and must read the database.
+      MemoryImageStore.clear();
+      final other = FirestoreUploadService(db, () => 'admin');
+      expect((await other.fetch(url))!.length, 2000);
+      expect(await other.fetch('${FirestoreUploadService.scheme}missing'), isNull);
+    });
+
+    test('a photo that is too large is refused', () async {
+      final db = FakeFirebaseFirestore();
+      final service = FirestoreUploadService(db, () => 'owner-1');
+      expect(
+          () => service.upload(photo(FirestoreUploadService.maxBytes + 1),
+              folder: 'ids'),
+          throwsA(isA<ImageUploadException>()));
+      expect((await db.collection('images').get()).docs, isEmpty);
+    });
+  });
+
   group('Google sign-in', () {
     const google = DemoAuthRepository.googleProfile;
 
@@ -667,7 +703,8 @@ void main() {
       final be = await Backend.demo(seed: false);
       await expectLater(
           be.continueWithGoogle(), throwsA(isA<AuthException>()));
-      expect(be.auth.currentUid, isNull);
+      expect(be.auth.currentUid, isNull,
+          reason: 'the unregistered login is removed again');
       expect(await be.users.get(google.uid), isNull);
     });
 

@@ -7,16 +7,18 @@ every completed booking.
 
 ## Running it
 
-### Demo mode (no setup)
-
 ```sh
 flutter pub get
 flutter run
 ```
 
-Without any flags the app uses an **in-memory backend** seeded with sample
-Davao data (Buhangin, Matina Crossing, Talomo…). Data resets on restart. Demo
-mode only works in **debug** builds.
+The app runs on the live Firebase project **`linis-davao`** (Firestore in
+Singapore). Email/password and Google sign-in are both turned on there.
+
+### Sample accounts
+
+These accounts and their sample Davao data (Buhangin, Matina Crossing,
+Talomo…) are saved in the Firebase project, so they work on any device.
 
 | Role | Email | Password |
 |---|---|---|
@@ -26,44 +28,64 @@ mode only works in **debug** builds.
 | Cleaner awaiting verification | rosa@linis.ph | linis123 |
 | Admin | admin@linis.ph | linis123 |
 
-The login screen has one-tap buttons for these. On web you can also open
+The login screen has one-tap buttons for these. Hide the buttons with
+`--dart-define=LINIS_SAMPLE_LOGINS=false`. Before a real launch, also delete
+these accounts in the Firebase console, because the passwords are public.
+
+### Google sign-in
+
+- **Register:** choose "Book a cleaner" or "Offer cleaning services", tick the
+  terms, then tap **Continue with Google**. The name, email and photo come from
+  Google.
+- **Log in:** tap **Continue with Google** on the login screen. A Google
+  account that has not registered is refused, and its login is removed again.
+- **Android:** Google only accepts builds signed with a key that is listed in
+  **Firebase console → Project settings → Your apps → Android app**. The debug
+  key of the first development PC is already there. On another PC, or for a
+  release build, get the key with `cd android && ./gradlew signingReport`, add
+  its `SHA1`, then run `flutterfire configure` again.
+
+### After cloning
+
+`android/app/google-services.json` is not in git. Create it with:
+
+```sh
+dart pub global activate flutterfire_cli
+flutterfire configure --project=linis-davao
+```
+
+### Photos
+
+Uploaded photos (profile photos, IDs, permits, saved places) are saved in the
+Firebase database under `images/{id}`, so they show on every device with no
+extra setup. Photos are shrunk before upload and must be under about 900 KB.
+
+To use Cloudinary instead, create an **unsigned upload preset** and run:
+
+```sh
+flutter run --dart-define=CLOUDINARY_CLOUD_NAME=<cloud> \
+  --dart-define=CLOUDINARY_UPLOAD_PRESET=<preset>
+```
+
+### Offline demo mode
+
+```sh
+flutter run --dart-define=LINIS_BACKEND=demo
+```
+
+This uses an in-memory copy of the same sample data and needs no internet. Data
+resets on restart, Google sign-in is simulated (it always signs in as "Juan
+Dela Cruz"), and it only works in **debug** builds. On web you can also open
 `?as=customer`, `?as=cleaner`, `?as=company`, `?as=pending` or `?as=admin`.
 
-**Continue with Google** also works in demo mode, but it is simulated. It
-always signs in as the sample account "Juan Dela Cruz". Real Google sign-in
-needs the live Firebase setup below.
+### Changing the rules or sign-in methods
 
-### Live Firebase
+```sh
+firebase deploy --only firestore,auth
+```
 
-1. Create a Firebase project. Enable **Authentication → Email/Password**,
-   **Authentication → Google** and **Cloud Firestore**.
-2. From this folder:
-   ```sh
-   dart pub global activate flutterfire_cli
-   flutterfire configure
-   ```
-   This overwrites `lib/firebase_options.dart`.
-3. For Google sign-in on Android, add your app's SHA-1 key to Firebase:
-   ```sh
-   cd android && ./gradlew signingReport
-   ```
-   Copy the `SHA1` value into **Firebase console → Project settings → Your
-   apps → Android app → Add fingerprint**. Then run `flutterfire configure`
-   again so `android/app/google-services.json` is updated.
-4. Deploy the rules and indexes:
-   ```sh
-   firebase deploy --only firestore
-   ```
-5. Create a Cloudinary **unsigned upload preset** for photos, IDs and
-   permits. Without it, uploaded photos are only kept until the app restarts.
-6. Run:
-   ```sh
-   flutter run --dart-define=LINIS_BACKEND=firebase \
-     --dart-define=CLOUDINARY_CLOUD_NAME=<cloud> \
-     --dart-define=CLOUDINARY_UPLOAD_PRESET=<preset>
-   ```
-7. Make an admin: register normally, then change that user's `role` to
-   `admin` in the Firestore console.
+To make another admin, register normally, then change that user's `role` to
+`admin` in the Firestore console.
 
 ## Tests
 
@@ -74,7 +96,8 @@ flutter test
 `test/backend_test.dart` covers pricing, commission, the full booking lifecycle
 (GCash and cash), the settlement cap, two-way ratings, declines and refunds,
 saved places (create, read, update, delete) and Google sign-in.
-`test/app_flow_test.dart` drives the UI for each role.
+`test/app_flow_test.dart` drives the UI for each role. The tests use the
+in-memory demo backend, so they never touch the Firebase project.
 
 ## How it's built
 
@@ -163,5 +186,6 @@ under **Account → Edit name & phone**.
 - **Money is computed on the client**, inside transactions. The security rules
   limit who can change which fields. For production, move
   `confirmCompletion`, `settle` and review averaging into Cloud Functions.
-- **Documents are public URLs** with Cloudinary unsigned uploads. Use signed or
-  authenticated delivery for IDs and permits.
+- **Uploaded IDs and permits can be viewed by any signed-in user** who has the
+  link, and Cloudinary uploads are public URLs. For production, limit them to
+  the owner and admins.

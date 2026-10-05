@@ -62,7 +62,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isDemo = context.read<Backend>().isDemo;
+    final showSampleLogins = context.read<Backend>().showSampleLogins;
     return Scaffold(
       appBar: AppBar(),
       body: SafeArea(
@@ -120,7 +120,7 @@ class _LoginScreenState extends State<LoginScreen> {
               const OrDivider(),
               const SizedBox(height: 16),
               GoogleButton(onPressed: _google),
-              if (isDemo) ...[
+              if (showSampleLogins) ...[
                 const SizedBox(height: 32),
                 const SectionTitle('Try a demo account'),
                 Wrap(

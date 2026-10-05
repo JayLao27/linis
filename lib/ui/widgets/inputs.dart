@@ -363,8 +363,7 @@ class _AddressFormState extends State<AddressForm> {
   }
 }
 
-/// Picks a photo from the gallery/camera and uploads it (Cloudinary, or the
-/// in-memory store in demo mode). Shows the current image.
+/// Picks a photo from the gallery and uploads it. Shows the current image.
 class ImageUploadField extends StatefulWidget {
   const ImageUploadField({
     super.key,
@@ -389,7 +388,7 @@ class _ImageUploadFieldState extends State<ImageUploadField> {
 
   Future<void> _pick() async {
     final file = await ImagePicker()
-        .pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+        .pickImage(source: ImageSource.gallery, maxWidth: 1280, imageQuality: 75);
     if (file == null || !mounted) return;
     setState(() => _uploading = true);
     final uploads = context.read<Backend>().uploads;

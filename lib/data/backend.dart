@@ -49,6 +49,9 @@ class Backend {
   final PaymentGateway payments;
   final PsgcService psgc;
   final bool isDemo;
+
+  /// Whether the login screen offers the one-tap sample accounts.
+  bool get showSampleLogins => isDemo || AppConfig.sampleLogins;
   final PricingService pricing = const PricingService();
 
   late final NotificationRepository notifications;
@@ -66,8 +69,7 @@ class Backend {
     var assertionsOn = false;
     assert(assertionsOn = true);
     if (!assertionsOn) {
-      throw StateError('The demo backend only runs in debug builds. '
-          'Build with --dart-define=LINIS_BACKEND=firebase for release.');
+      throw StateError('The demo backend only runs in debug builds.');
     }
     return demo();
   }
@@ -78,9 +80,11 @@ class Backend {
     return Backend._(
       db: FirebaseFirestore.instance,
       auth: FirebaseAuthRepository(FirebaseAuth.instance),
+      // Without Cloudinary, photos are saved in the Firebase database.
       uploads: AppConfig.cloudinaryConfigured
           ? CloudinaryUploadService()
-          : MemoryUploadService(),
+          : FirestoreUploadService(FirebaseFirestore.instance,
+              () => FirebaseAuth.instance.currentUser?.uid),
       isDemo: false,
     );
   }
@@ -144,8 +148,8 @@ class Backend {
     if (await users.get(google.uid) != null) return true;
 
     if (role == null) {
-      await auth.signOut();
-      throw AuthException('No Linis account uses that Google account yet. '
+      await auth.deleteCurrentLogin();
+      throw AuthException('That Google account is not registered yet. '
           'Go back and choose how you want to use Linis to create one.');
     }
     await _createProfile(

@@ -25,6 +25,12 @@ class DemoSeed {
   static const pendingEmail = 'rosa@linis.ph';
   static const adminEmail = 'admin@linis.ph';
 
+  /// Stand-in pictures for the sample cleaners' ID and business permit.
+  static const sampleIdUrl =
+      'https://placehold.co/800x500/png?text=Sample+Government+ID';
+  static const samplePermitUrl =
+      'https://placehold.co/800x1000/png?text=Sample+Business+Permit';
+
   static const buhangin = PsgcPlace(code: '112402021', name: 'Buhangin (Pob.)');
   static const matinaCrossing =
       PsgcPlace(code: '112402075', name: 'Matina Crossing');
@@ -135,7 +141,7 @@ class DemoSeed {
       'baseRate': 900,
       'businessName': 'SparkleCrew Cleaning Services',
       'businessRegNo': 'DTI-11-2016-004821',
-      'permitUrl': 'seed://permit',
+      'permitUrl': samplePermitUrl,
       'crewSize': 12,
       'equipment': [
         'Industrial vacuum',
@@ -160,7 +166,7 @@ class DemoSeed {
       'baseRate': 800,
       'businessName': 'Kalimpyo Davao Inc.',
       'businessRegNo': 'SEC-CS201912345',
-      'permitUrl': 'seed://permit',
+      'permitUrl': samplePermitUrl,
       'crewSize': 6,
       'equipment': ['Wet/dry vacuum', 'Floor polisher', 'Ladders'],
       'ratingAvg': 4.5,
@@ -180,7 +186,7 @@ class DemoSeed {
           _services([ServiceType.regular, ServiceType.deep, ServiceType.moveInOut]),
       'baseRate': 450,
       'govIdType': 'PhilSys National ID',
-      'govIdUrl': 'seed://id',
+      'govIdUrl': sampleIdUrl,
       'yearsExperience': 6,
       'ratingAvg': 4.9,
       'ratingCount': 27,
@@ -198,7 +204,7 @@ class DemoSeed {
       'servicesOffered': _services([ServiceType.regular, ServiceType.deep]),
       'baseRate': 400,
       'govIdType': "Driver's License",
-      'govIdUrl': 'seed://id',
+      'govIdUrl': sampleIdUrl,
       'yearsExperience': 3,
       'ratingAvg': 4.6,
       'ratingCount': 12,
@@ -216,7 +222,7 @@ class DemoSeed {
           _services([ServiceType.regular, ServiceType.deep, ServiceType.moveInOut]),
       'baseRate': 500,
       'govIdType': 'Passport',
-      'govIdUrl': 'seed://id',
+      'govIdUrl': sampleIdUrl,
       'yearsExperience': 8,
       'ratingAvg': 4.7,
       'ratingCount': 9,
@@ -235,7 +241,7 @@ class DemoSeed {
       'servicesOffered': _services([ServiceType.regular]),
       'baseRate': 420,
       'govIdType': 'UMID',
-      'govIdUrl': 'seed://id',
+      'govIdUrl': sampleIdUrl,
       'yearsExperience': 2,
       'createdAt': Timestamp.fromDate(_daysAgo(1)),
     });
@@ -250,7 +256,7 @@ class DemoSeed {
       'baseRate': 1000,
       'businessName': 'CleanPro Mindanao Services',
       'businessRegNo': 'DTI-11-2024-118930',
-      'permitUrl': 'seed://permit',
+      'permitUrl': samplePermitUrl,
       'crewSize': 9,
       'equipment': ['Industrial vacuum', 'Scaffolding'],
       'createdAt': Timestamp.fromDate(_daysAgo(2)),

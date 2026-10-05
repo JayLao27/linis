@@ -38,6 +38,10 @@ abstract class AuthRepository {
 
   /// Lets the user pick a Google account. Returns null if they cancel.
   Future<GoogleProfile?> signInWithGoogle();
+
+  /// Removes the login of the signed-in user and signs them out. Used when a
+  /// Google account tries to log in without being registered.
+  Future<void> deleteCurrentLogin();
   Future<void> sendPasswordReset(String email);
   Future<void> signOut();
 }
@@ -121,6 +125,12 @@ class FirebaseAuthRepository implements AuthRepository {
   @override
   Future<void> sendPasswordReset(String email) =>
       _guard(() => _auth.sendPasswordResetEmail(email: email.trim()));
+
+  @override
+  Future<void> deleteCurrentLogin() async {
+    await _guard(() async => _auth.currentUser?.delete());
+    await signOut();
+  }
 
   @override
   Future<void> signOut() async {
@@ -222,6 +232,9 @@ class DemoAuthRepository implements AuthRepository {
       throw AuthException('No account uses that email.');
     }
   }
+
+  @override
+  Future<void> deleteCurrentLogin() => signOut();
 
   @override
   Future<void> signOut() async => _set(null);

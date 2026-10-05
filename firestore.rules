@@ -128,6 +128,14 @@ service cloud.firestore {
         && request.resource.data.imageUrl.size() > 0;
     }
 
+    // Uploaded photos (used when Cloudinary is not set up). Any signed-in
+    // user can view a photo, but only its owner can add or delete it.
+    match /images/{imageId} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.ownerId == uid();
+      allow delete: if signedIn() && resource.data.ownerId == uid();
+    }
+
     match /reviews/{reviewId} {
       allow read: if signedIn();
       allow create: if signedIn() && request.resource.data.fromUid == uid()
