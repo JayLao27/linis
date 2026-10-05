@@ -9,6 +9,7 @@ import '../../widgets/common.dart';
 import '../../widgets/inputs.dart';
 import '../../widgets/marketplace.dart';
 import '../../widgets/sheets.dart';
+import '../customer/saved_places_screen.dart';
 import '../provider/provider_onboarding_screen.dart';
 import 'provider_profile_screen.dart';
 
@@ -112,6 +113,14 @@ class AccountScreen extends StatelessWidget {
                             const ProviderOnboardingScreen(editing: true))),
                   ),
                 ],
+                if (user.role == UserRole.customer)
+                  ListTile(
+                    leading: const Icon(Icons.home_work_outlined),
+                    title: const Text('Saved places'),
+                    trailing: const Icon(Icons.chevron_right_rounded),
+                    onTap: () => Navigator.of(context).push(MaterialPageRoute(
+                        builder: (_) => const SavedPlacesScreen())),
+                  ),
                 if (user.role == UserRole.customer)
                   ListTile(
                     leading: const Icon(Icons.reviews_outlined),
