@@ -5,9 +5,8 @@
 ///     --dart-define=CLOUDINARY_CLOUD_NAME=xxx \
 ///     --dart-define=CLOUDINARY_UPLOAD_PRESET=yyy  -> live Firebase + Cloudinary
 ///
-/// Google sign-in on Android reads its web client ID from
-/// `google-services.json`. Pass `--dart-define=GOOGLE_SERVER_CLIENT_ID=zzz`
-/// only if that file is not picked up.
+/// Google sign-in on Android normally needs no extra flag. If it fails with
+/// a client ID error, also pass `--dart-define=GOOGLE_SERVER_CLIENT_ID=zzz`.
 class AppConfig {
   AppConfig._();
 

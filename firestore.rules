@@ -113,7 +113,7 @@ service cloud.firestore {
             && request.resource.data.providerId == uid());
     }
 
-    // A customer's saved places. Private to their owner.
+    // A customer's saved places. Only the owner can see or change them.
     match /places/{placeId} {
       allow read, delete: if signedIn() && resource.data.ownerId == uid();
       allow create: if signedIn() && request.resource.data.ownerId == uid()

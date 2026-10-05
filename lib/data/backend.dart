@@ -128,11 +128,11 @@ class Backend {
     return uid;
   }
 
-  /// Signs in with Google. Returns false if the user closed the Google prompt.
+  /// Signs in with Google. Returns false if the user cancels.
   ///
-  /// A Google account seen for the first time needs a [role] to create its
-  /// profile with. The login screen passes none, so it only lets existing
-  /// accounts in.
+  /// If this Google account is new, a profile is created using [role].
+  /// The login screen gives no role, so only existing accounts can log in
+  /// there.
   Future<bool> continueWithGoogle({
     UserRole? role,
     ProviderTier? tier,
@@ -162,6 +162,7 @@ class Backend {
     return true;
   }
 
+  /// Saves the user's profile, plus a cleaner profile for providers.
   Future<void> _createProfile({
     required String uid,
     required String email,
